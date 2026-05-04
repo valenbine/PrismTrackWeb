@@ -836,6 +836,8 @@ function toggleStemPlayback(stemName) {
   }
   if (!stemGains[stemName]) return;
 
+  const shouldStartPlayback = playbackState !== "playing";
+
   if (soloStem === stemName) {
     soloStem = null;
     Object.keys(stemGains).forEach((name) => applyStemGain(name));
@@ -845,6 +847,11 @@ function toggleStemPlayback(stemName) {
   }
 
   updatePlayButtons();
+
+  // Solo should be audible immediately when user clicks it while idle/paused.
+  if (shouldStartPlayback) {
+    playAllStems();
+  }
 }
 
 function updatePlayButtons() {
