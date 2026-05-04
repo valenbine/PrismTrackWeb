@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import { createReadStream, createWriteStream, unlink, existsSync } from "node:fs";
-import { mkdir as mkdirAsync, stat, rm } from "node:fs/promises";
+import { mkdir as mkdirAsync, stat, rm, readdir } from "node:fs/promises";
 import http from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -73,12 +73,17 @@ async function handleHealth(request, response) {
     const spleeterCommand = await resolveSpleeterCommand();
     const result = await runCommand(spleeterCommand, ["--help"], 5000);
     const spleeterAvailable = result.code === 0;
+    const ffmpegResult = await runCommand("ffmpeg", ["-version"], 5000);
+    const ffmpegAvailable = ffmpegResult.code === 0;
+    const healthOk = spleeterAvailable && ffmpegAvailable;
     sendJson(response, 200, {
-      ok: spleeterAvailable,
-      version: spleeterAvailable ? "available" : "not found",
-      message: spleeterAvailable
-        ? "Spleeter 可用"
-        : "未检测到 Spleeter，请安装: pip install --break-system-packages spleeter",
+      ok: healthOk,
+      version: healthOk ? "available" : "not ready",
+      message: !spleeterAvailable
+        ? "未检测到 Spleeter，请安装: pip install --break-system-packages spleeter"
+        : !ffmpegAvailable
+          ? "未检测到 ffmpeg，请安装: apt-get install -y ffmpeg"
+          : "Spleeter 与 ffmpeg 可用",
     });
   } catch (error) {
     sendJson(response, 200, {
@@ -259,38 +264,9 @@ async function runSpleeter(job) {
   job.status = "completed";
   job.progress = 100;
 
-  const modelDir = path.join(job.outputDir, path.basename(job.inputPath).replace(/\.[^.]+$/, ""));
-  const stems = {};
-
-  if (job.separationMode === "vocals") {
-    const vocalsPath = path.join(modelDir, "vocals.wav");
-    const accompanimentPath = path.join(modelDir, "accompaniment.wav");
-    const candidates = [
-      ["vocals", vocalsPath],
-      ["other", accompanimentPath],
-    ];
-    for (const [key, filePath] of candidates) {
-      try {
-        const statResult = await stat(filePath);
-        if (statResult.isFile()) {
-          stems[key] = filePath;
-        }
-      } catch (e) {
-        console.error(`Stem not found: ${key}`);
-      }
-    }
-  } else {
-    for (const stem of ["vocals", "drums", "bass", "other", "piano", "guitar"]) {
-      const stemPath = path.join(modelDir, `${stem}.wav`);
-      try {
-        const statResult = await stat(stemPath);
-        if (statResult.isFile()) {
-          stems[stem] = stemPath;
-        }
-      } catch (e) {
-        console.error(`Stem not found: ${stem}`);
-      }
-    }
+  const stems = await collectSpleeterStems(job.outputDir, job.separationMode);
+  if (Object.keys(stems).length === 0) {
+    throw new Error("Spleeter 执行完成但未生成可用音轨，请检查 ffmpeg 与输入音频格式。");
   }
 
   job.stems = stems;
@@ -436,6 +412,52 @@ function normalizeSeparationMode(mode) {
     return "six";
   }
   return "four";
+}
+
+async function collectSpleeterStems(baseDir, separationMode) {
+  const wavFiles = [];
+  await walkWavFiles(baseDir, wavFiles);
+
+  const byName = new Map();
+  for (const filePath of wavFiles) {
+    const stemName = path.basename(filePath, ".wav").toLowerCase();
+    byName.set(stemName, filePath);
+  }
+
+  const stems = {};
+  const expected = separationMode === "vocals"
+    ? ["vocals", "accompaniment", "other"]
+    : ["vocals", "drums", "bass", "other", "piano", "guitar", "accompaniment"];
+
+  for (const stem of expected) {
+    const filePath = byName.get(stem);
+    if (!filePath) {
+      continue;
+    }
+    if (stem === "accompaniment") {
+      if (!stems.other) {
+        stems.other = filePath;
+      }
+    } else {
+      stems[stem] = filePath;
+    }
+  }
+
+  return stems;
+}
+
+async function walkWavFiles(dirPath, output) {
+  const entries = await readdir(dirPath, { withFileTypes: true });
+  for (const entry of entries) {
+    const fullPath = path.join(dirPath, entry.name);
+    if (entry.isDirectory()) {
+      await walkWavFiles(fullPath, output);
+      continue;
+    }
+    if (entry.isFile() && entry.name.toLowerCase().endsWith(".wav")) {
+      output.push(fullPath);
+    }
+  }
 }
 
 function parseMultipartStream(request, boundary, maxBytes) {

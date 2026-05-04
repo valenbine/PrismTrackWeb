@@ -930,6 +930,9 @@ function resetStemStates() {
   masterProgress.disabled = true;
   setStemLoadStatus("");
 
+  // Keep button label/icon in sync after state reset.
+  updatePlayAllButton();
+
   updateStemVisibility(separationModeSelect.value, []);
 }
 
