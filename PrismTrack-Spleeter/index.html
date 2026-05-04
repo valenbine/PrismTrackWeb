@@ -1,0 +1,297 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="基于 Spleeter 的浏览器端音乐源分离 Web 应用，可将音乐分离为人声、鼓组、贝斯、钢琴等独立音轨。"
+    />
+    <title>PrismTrack 音乐分轨</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&family=Righteous&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <section class="hero" aria-labelledby="app-title">
+        <div class="hero__content">
+          <p class="eyebrow">Spleeter Music Source Separation</p>
+          <h1 id="app-title">上传音乐<br />立即分轨</h1>
+          <p class="hero__copy">
+            基于 Deezer Spleeter 深度学习模型，将音乐分离为人声、鼓组、贝斯、钢琴、其他乐器等独立音轨。
+          </p>
+          <div class="hero__badges" aria-label="功能特点">
+            <span>Spleeter</span>
+            <span>2/4/5 Stems</span>
+            <span>多轨分离</span>
+          </div>
+        </div>
+        <div class="hero__visual" aria-hidden="true">
+          <div class="orb orb--green"></div>
+          <div class="orb orb--blue"></div>
+          <div class="stems-card">
+            <div class="stems-card__tracks">
+              <div class="track-row">
+                <span class="track-icon">🎤</span>
+                <span class="track-name">Vocals</span>
+                <div class="track-bar"><div class="track-bar__fill" style="width: 85%"></div></div>
+              </div>
+              <div class="track-row">
+                <span class="track-icon">🥁</span>
+                <span class="track-name">Drums</span>
+                <div class="track-bar"><div class="track-bar__fill" style="width: 60%"></div></div>
+              </div>
+              <div class="track-row">
+                <span class="track-icon">🎸</span>
+                <span class="track-name">Bass</span>
+                <div class="track-bar"><div class="track-bar__fill" style="width: 45%"></div></div>
+              </div>
+              <div class="track-row">
+                <span class="track-icon">🎹</span>
+                <span class="track-name">Other</span>
+                <div class="track-bar"><div class="track-bar__fill" style="width: 70%"></div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="workspace" aria-label="分轨工作台">
+        <form class="upload-card" id="upload-form">
+          <div class="upload-card__header">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M12 3v11m0-11 4 4m-4-4-4 4M4 15v3a3 3 0 0 0 3 3h10a3 3 0 0 0 3-3v-3" />
+            </svg>
+            <div>
+              <h2>上传音频</h2>
+              <p>支持 mp3、wav、m4a、ogg、flac 等常见音频格式。</p>
+            </div>
+          </div>
+
+          <div class="model-selector">
+            <label for="model-select">选择模型</label>
+            <select id="model-select">
+              <option value="spleeter:2stems">spleeter:2stems (标准 2 轨)</option>
+              <option value="spleeter:4stems">spleeter:4stems (标准 4 轨)</option>
+              <option value="spleeter:5stems">spleeter:5stems (扩展 5 轨)</option>
+            </select>
+          </div>
+
+          <div class="model-selector">
+            <label for="separation-mode">分轨模式</label>
+            <select id="separation-mode">
+              <option value="four">4轨分离 (人声/鼓/贝斯/其他)</option>
+              <option value="six">5轨分离 (含钢琴)</option>
+              <option value="vocals">2轨分离 (人声/伴奏)</option>
+            </select>
+            <p class="model-hint" id="model-hint" role="note"></p>
+          </div>
+
+          <label class="drop-zone" for="audio-file" id="drop-zone">
+            <input id="audio-file" type="file" accept="audio/*" />
+            <span class="drop-zone__title">选择或拖放音频文件</span>
+            <span class="drop-zone__hint">建议上传 10 秒到 10 分钟的音乐片段</span>
+          </label>
+
+          <div class="file-meta" id="file-meta" hidden></div>
+
+          <button class="primary-action" type="submit" id="separate-button" disabled>
+            开始分轨
+          </button>
+        </form>
+
+        <div class="status-card">
+          <div class="status-card__topline">
+            <div>
+              <p class="eyebrow">Processing Status</p>
+              <h2 id="status-title">等待音频</h2>
+            </div>
+            <span class="status-pill" id="status-pill">Idle</span>
+          </div>
+          <p class="status-copy" id="status-copy">
+            上传音频文件并选择模型后，点击开始分轨。处理时间取决于音频长度和服务器性能。
+          </p>
+          <div class="progress" aria-label="处理进度">
+            <span id="progress-bar"></span>
+          </div>
+
+          <div class="summary-grid" aria-label="处理摘要">
+            <div>
+              <span class="metric" id="file-name">--</span>
+              <span class="metric-label">文件名</span>
+            </div>
+            <div>
+              <span class="metric" id="file-duration">0:00</span>
+              <span class="metric-label">音频时长</span>
+            </div>
+            <div>
+              <span class="metric" id="model-used">--</span>
+              <span class="metric-label">使用模型</span>
+            </div>
+          </div>
+          <div class="poll-debug-wrap" aria-label="调试信息">
+            <button class="poll-debug-toggle" id="poll-debug-toggle" type="button">显示调试反馈</button>
+            <div class="poll-debug" id="poll-debug" hidden>
+              <div class="poll-debug__title">调试轮询反馈</div>
+              <div class="poll-debug__line" id="poll-debug-line">等待任务开始</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="results" aria-labelledby="results-title">
+        <div class="section-heading">
+          <p class="eyebrow">Results</p>
+          <h2 id="results-title">分轨结果</h2>
+        </div>
+
+        <!-- 混音控制栏 -->
+        <div class="mixer-controls" id="mixer-controls">
+          <div class="master-controls">
+            <button class="master-btn" id="play-all-btn" disabled title="全部播放">
+              <span class="btn-icon">▶</span>
+              <span class="btn-text">播放全部</span>
+            </button>
+            <button class="master-btn" id="stop-all-btn" disabled title="全部停止">
+              <span class="btn-icon">◼</span>
+              <span class="btn-text">停止</span>
+            </button>
+            <button class="master-btn" id="mute-all-btn" title="全部静音">
+              <span class="btn-icon">🔊</span>
+              <span class="btn-text">静音</span>
+            </button>
+          </div>
+          <div class="master-time" id="master-time">0:00 / 0:00</div>
+        </div>
+        <div class="master-progress-wrap">
+          <input
+            id="master-progress"
+            class="master-progress"
+            type="range"
+            min="0"
+            max="1000"
+            value="0"
+            step="1"
+            disabled
+            aria-label="播放进度"
+          />
+        </div>
+        <div class="stems-load-status" id="stems-load-status"></div>
+
+        <div class="stems-grid" id="stems-grid">
+          <div class="stem-card" data-stem="vocals">
+            <div class="stem-card__header">
+              <span class="stem-icon">🎤</span>
+              <h3>人声</h3>
+              <button class="mute-btn stem-mute" data-stem="vocals" title="静音">🔊</button>
+              <input type="range" class="volume-slider stem-volume" data-stem="vocals" min="0" max="100" value="80" title="音量">
+            </div>
+            <div class="stem-waveform" id="waveform-vocals">
+              <canvas id="canvas-vocals" width="400" height="80"></canvas>
+            </div>
+            <div class="stem-controls">
+              <button class="play-action stem-play" data-stem="vocals" disabled>播放</button>
+              <button class="secondary-action stem-download" data-stem="vocals" disabled>下载</button>
+            </div>
+          </div>
+
+          <div class="stem-card" data-stem="drums">
+            <div class="stem-card__header">
+              <span class="stem-icon">🥁</span>
+              <h3>鼓组</h3>
+              <button class="mute-btn stem-mute" data-stem="drums" title="静音">🔊</button>
+              <input type="range" class="volume-slider stem-volume" data-stem="drums" min="0" max="100" value="80" title="音量">
+            </div>
+            <div class="stem-waveform" id="waveform-drums">
+              <canvas id="canvas-drums" width="400" height="80"></canvas>
+            </div>
+            <div class="stem-controls">
+              <button class="play-action stem-play" data-stem="drums" disabled>播放</button>
+              <button class="secondary-action stem-download" data-stem="drums" disabled>下载</button>
+            </div>
+          </div>
+
+          <div class="stem-card" data-stem="bass">
+            <div class="stem-card__header">
+              <span class="stem-icon">🎸</span>
+              <h3>贝斯</h3>
+              <button class="mute-btn stem-mute" data-stem="bass" title="静音">🔊</button>
+              <input type="range" class="volume-slider stem-volume" data-stem="bass" min="0" max="100" value="80" title="音量">
+            </div>
+            <div class="stem-waveform" id="waveform-bass">
+              <canvas id="canvas-bass" width="400" height="80"></canvas>
+            </div>
+            <div class="stem-controls">
+              <button class="play-action stem-play" data-stem="bass" disabled>播放</button>
+              <button class="secondary-action stem-download" data-stem="bass" disabled>下载</button>
+            </div>
+          </div>
+
+          <div class="stem-card" data-stem="other">
+            <div class="stem-card__header">
+              <span class="stem-icon">🎻</span>
+              <h3>其他</h3>
+              <button class="mute-btn stem-mute" data-stem="other" title="静音">🔊</button>
+              <input type="range" class="volume-slider stem-volume" data-stem="other" min="0" max="100" value="80" title="音量">
+            </div>
+            <div class="stem-waveform" id="waveform-other">
+              <canvas id="canvas-other" width="400" height="80"></canvas>
+            </div>
+            <div class="stem-controls">
+              <button class="play-action stem-play" data-stem="other" disabled>播放</button>
+              <button class="secondary-action stem-download" data-stem="other" disabled>下载</button>
+            </div>
+          </div>
+
+          <div class="stem-card" data-stem="guitar">
+            <div class="stem-card__header">
+              <span class="stem-icon">🎸</span>
+              <h3>吉他</h3>
+              <button class="mute-btn stem-mute" data-stem="guitar" title="静音">🔊</button>
+              <input type="range" class="volume-slider stem-volume" data-stem="guitar" min="0" max="100" value="80" title="音量">
+            </div>
+            <div class="stem-waveform" id="waveform-guitar">
+              <canvas id="canvas-guitar" width="400" height="80"></canvas>
+            </div>
+            <div class="stem-controls">
+              <button class="play-action stem-play" data-stem="guitar" disabled>播放</button>
+              <button class="secondary-action stem-download" data-stem="guitar" disabled>下载</button>
+            </div>
+          </div>
+
+          <div class="stem-card" data-stem="piano">
+            <div class="stem-card__header">
+              <span class="stem-icon">🎹</span>
+              <h3>钢琴</h3>
+              <button class="mute-btn stem-mute" data-stem="piano" title="静音">🔊</button>
+              <input type="range" class="volume-slider stem-volume" data-stem="piano" min="0" max="100" value="80" title="音量">
+            </div>
+            <div class="stem-waveform" id="waveform-piano">
+              <canvas id="canvas-piano" width="400" height="80"></canvas>
+            </div>
+            <div class="stem-controls">
+              <button class="play-action stem-play" data-stem="piano" disabled>播放</button>
+              <button class="secondary-action stem-download" data-stem="piano" disabled>下载</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="download-all-section">
+          <button class="primary-action" id="download-all-button" disabled>
+            下载全部音轨 (ZIP)
+          </button>
+          <p class="download-note">播放缓存用于试听，下载文件仍从服务器生成与提供。</p>
+        </div>
+
+        
+      </section>
+    </main>
+
+    <script type="module" src="./src/main.js"></script>
+  </body>
+</html>
