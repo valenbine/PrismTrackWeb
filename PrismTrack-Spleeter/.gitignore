@@ -119,6 +119,7 @@
 *.cache
 **/.cache/
 **/.runtime/
+**/pretrained_models/
 **/tmp/
 **/temp/
 
