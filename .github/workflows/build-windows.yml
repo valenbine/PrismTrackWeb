@@ -58,7 +58,8 @@ jobs:
         working-directory: PrismTrack-Spleeter
         shell: pwsh
         run: |
-          $path = ".github/windows-silence.wav"
+          New-Item -ItemType Directory -Force -Path .runtime/model-warmup-input | Out-Null
+          $path = ".runtime/model-warmup-input/windows-silence.wav"
           $sampleRate = 44100
           $seconds = 1
           $channels = 2
@@ -90,9 +91,9 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path pretrained_models | Out-Null
-          vendor/python/Scripts/spleeter separate -p spleeter:2stems -o .runtime/model-warmup .github/windows-silence.wav
-          vendor/python/Scripts/spleeter separate -p spleeter:4stems -o .runtime/model-warmup .github/windows-silence.wav
-          vendor/python/Scripts/spleeter separate -p spleeter:5stems -o .runtime/model-warmup .github/windows-silence.wav
+          vendor/python/Scripts/spleeter separate -p spleeter:2stems -o .runtime/model-warmup .runtime/model-warmup-input/windows-silence.wav
+          vendor/python/Scripts/spleeter separate -p spleeter:4stems -o .runtime/model-warmup .runtime/model-warmup-input/windows-silence.wav
+          vendor/python/Scripts/spleeter separate -p spleeter:5stems -o .runtime/model-warmup .runtime/model-warmup-input/windows-silence.wav
 
       - name: Install Node dependencies
         working-directory: PrismTrack-Spleeter
