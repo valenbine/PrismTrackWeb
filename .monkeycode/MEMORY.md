@@ -44,3 +44,12 @@ Agent 在任务执行过程中发现的条目应遵循以下格式：
   - 前端风格与交互功能保持和参考项目一致
   - 后端分离模型从 Demucs 替换为 Spleeter
   - 相关文件夹命名改为 Spleeter 与 PrismTrack 相关，不保留原 Demucs 命名
+
+[为项目增加 Windows 封装工作流]
+- Date: 2026-05-04
+- Context: 用户要求在不改原本 Web 应用代码的前提下，新增 GitHub Windows 应用封装能力
+- Instructions:
+  - 不修改原本 Web 应用业务代码，采用新增封装层的方式实现 Windows 应用
+  - 安装程序需要支持用户选择安装路径
+  - 生成符合标准的应用 ICO 多尺寸图标资源
+  - 程序内超链接需使用 Windows 默认浏览器打开

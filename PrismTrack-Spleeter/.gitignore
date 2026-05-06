@@ -158,6 +158,10 @@
 **/.flutter-plugins
 **/.flutter-plugins-dependencies
 
+!build/
+!build/icons/
+!build/icons/**
+
 # Compressed files
 *.zip
 *.rar

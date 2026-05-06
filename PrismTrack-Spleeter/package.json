@@ -3,11 +3,75 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
+  "main": "desktop/main.cjs",
   "scripts": {
     "start": "node server.js",
-    "dev": "node server.js"
+    "dev": "node server.js",
+    "desktop": "electron .",
+    "dist:win": "electron-builder --win nsis",
+    "generate:icons": "node scripts/generate-icons.cjs"
   },
   "dependencies": {
-    "archiver": "^7.0.1"
+    "archiver": "^7.0.1",
+    "electron": "^31.7.7",
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "com.valenbine.prismtrack",
+    "productName": "PrismTrack",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "desktop/**/*",
+      "index.html",
+      "styles.css",
+      "src/**/*",
+      "server.js",
+      "package.json",
+      "package-lock.json",
+      "favicon.svg"
+    ],
+    "extraResources": [
+      {
+        "from": "vendor/python",
+        "to": "vendor/python",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "vendor/ffmpeg",
+        "to": "vendor/ffmpeg",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "pretrained_models",
+        "to": "pretrained_models",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icons/prismtrack.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "PrismTrack"
+    }
   }
 }

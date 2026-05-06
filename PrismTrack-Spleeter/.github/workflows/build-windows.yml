@@ -1,0 +1,111 @@
+name: Build Windows App
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - master
+      - 260504-feat-prismtrack-spleeter-migration
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: PrismTrack-Spleeter/package-lock.json
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install ffmpeg
+        shell: pwsh
+        run: choco install ffmpeg -y
+
+      - name: Install Spleeter
+        working-directory: PrismTrack-Spleeter
+        run: pip install spleeter==2.4.2
+
+      - name: Prepare bundled Python runtime
+        working-directory: PrismTrack-Spleeter
+        shell: pwsh
+        run: |
+          python -m venv vendor/python
+          vendor/python/Scripts/python -m pip install --upgrade pip
+          vendor/python/Scripts/python -m pip install spleeter==2.4.2
+
+      - name: Prepare bundled ffmpeg
+        working-directory: PrismTrack-Spleeter
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path vendor/ffmpeg/bin | Out-Null
+          Copy-Item "C:/ProgramData/chocolatey/bin/ffmpeg.exe" "vendor/ffmpeg/bin/ffmpeg.exe"
+
+      - name: Generate warmup audio
+        working-directory: PrismTrack-Spleeter
+        shell: pwsh
+        run: |
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $path = ".github/windows-silence.wav"
+          $sampleRate = 44100
+          $seconds = 1
+          $channels = 2
+          $bitsPerSample = 16
+          $samples = $sampleRate * $seconds
+          $blockAlign = $channels * ($bitsPerSample / 8)
+          $byteRate = $sampleRate * $blockAlign
+          $dataSize = $samples * $blockAlign
+          $fs = [System.IO.File]::Open($path, [System.IO.FileMode]::Create)
+          $bw = New-Object System.IO.BinaryWriter($fs)
+          $bw.Write([System.Text.Encoding]::ASCII.GetBytes("RIFF"))
+          $bw.Write([int](36 + $dataSize))
+          $bw.Write([System.Text.Encoding]::ASCII.GetBytes("WAVE"))
+          $bw.Write([System.Text.Encoding]::ASCII.GetBytes("fmt "))
+          $bw.Write([int]16)
+          $bw.Write([short]1)
+          $bw.Write([short]$channels)
+          $bw.Write([int]$sampleRate)
+          $bw.Write([int]$byteRate)
+          $bw.Write([short]$blockAlign)
+          $bw.Write([short]$bitsPerSample)
+          $bw.Write([System.Text.Encoding]::ASCII.GetBytes("data"))
+          $bw.Write([int]$dataSize)
+          for ($i = 0; $i -lt $samples * $channels; $i++) { $bw.Write([short]0) }
+          $bw.Close()
+
+      - name: Prepare pretrained models
+        working-directory: PrismTrack-Spleeter
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path pretrained_models | Out-Null
+          vendor/python/Scripts/spleeter separate -p spleeter:2stems -o .runtime/model-warmup .github/windows-silence.wav
+          vendor/python/Scripts/spleeter separate -p spleeter:4stems -o .runtime/model-warmup .github/windows-silence.wav
+          vendor/python/Scripts/spleeter separate -p spleeter:5stems -o .runtime/model-warmup .github/windows-silence.wav
+
+      - name: Install Node dependencies
+        working-directory: PrismTrack-Spleeter
+        run: npm install
+
+      - name: Generate Windows icon set
+        working-directory: PrismTrack-Spleeter
+        run: npm run generate:icons
+
+      - name: Build Windows installer
+        working-directory: PrismTrack-Spleeter
+        run: npm run dist:win
+
+      - name: Upload installer artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: PrismTrack-windows
+          path: PrismTrack-Spleeter/release/*
