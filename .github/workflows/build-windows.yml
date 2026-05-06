@@ -61,7 +61,7 @@ jobs:
             "Lib/site-packages",
             "import site"
           ) | Set-Content (Join-Path $pythonRoot "python310._pth")
-          Invoke-WebRequest -Uri "https://bootstrap.pypa.io/pip/3.10/get-pip.py" -OutFile $getPip
+          Invoke-WebRequest -Uri "https://bootstrap.pypa.io/get-pip.py" -OutFile $getPip
           & "$pythonRoot/python.exe" $getPip --no-warn-script-location
           & "$pythonRoot/python.exe" -m pip install --upgrade pip
           & "$pythonRoot/python.exe" -m pip install --no-warn-script-location --target "$sitePackages" tensorflow==2.12.1 ffmpeg-python==0.2.0 httpx[http2]==0.19.0 norbert==0.2.1 numpy==1.24.3 pandas==1.5.3 typer==0.3.2
