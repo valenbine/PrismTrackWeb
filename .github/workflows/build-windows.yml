@@ -73,6 +73,7 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force -Path vendor/ffmpeg/bin | Out-Null
           Copy-Item "C:/ProgramData/chocolatey/bin/ffmpeg.exe" "vendor/ffmpeg/bin/ffmpeg.exe"
+          Copy-Item "C:/ProgramData/chocolatey/bin/ffprobe.exe" "vendor/ffmpeg/bin/ffprobe.exe"
 
       - name: Generate warmup audio
         working-directory: PrismTrack-Spleeter

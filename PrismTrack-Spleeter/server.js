@@ -81,7 +81,9 @@ async function handleHealth(request, response) {
     const spleeterAvailable = result.code === 0;
     const ffmpegResult = await runCommand("ffmpeg", ["-version"], 5000);
     const ffmpegAvailable = ffmpegResult.code === 0;
-    const healthOk = spleeterAvailable && ffmpegAvailable;
+    const ffprobeResult = await runCommand("ffprobe", ["-version"], 5000);
+    const ffprobeAvailable = ffprobeResult.code === 0;
+    const healthOk = spleeterAvailable && ffmpegAvailable && ffprobeAvailable;
     sendJson(response, 200, {
       ok: healthOk,
       version: healthOk ? "available" : "not ready",
@@ -89,6 +91,8 @@ async function handleHealth(request, response) {
         ? "未检测到 Spleeter，请安装: pip install --break-system-packages spleeter"
         : !ffmpegAvailable
           ? "未检测到 ffmpeg，请安装: apt-get install -y ffmpeg"
+          : !ffprobeAvailable
+            ? "未检测到 ffprobe，请确认 ffmpeg 发行包包含 ffprobe 可执行文件"
           : "Spleeter 与 ffmpeg 可用",
     });
   } catch (error) {
@@ -272,7 +276,7 @@ async function runSpleeter(job) {
 
   const stems = await collectSpleeterStems(job.outputDir, job.separationMode);
   if (Object.keys(stems).length === 0) {
-    throw new Error("Spleeter 执行完成但未生成可用音轨，请检查 ffmpeg 与输入音频格式。");
+    throw new Error(`Spleeter 执行完成但未生成可用音轨。输出日志: ${result.stderr || result.stdout || "(empty)"}`);
   }
 
   job.stems = stems;
