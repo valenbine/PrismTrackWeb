@@ -89,6 +89,10 @@ jobs:
       - name: Prepare pretrained models
         working-directory: PrismTrack-Spleeter
         shell: pwsh
+        env:
+          GITHUB_HOST: https://github.com
+          GITHUB_REPOSITORY: deezer/spleeter
+          GITHUB_RELEASE: v1.4.0
         run: |
           New-Item -ItemType Directory -Force -Path pretrained_models | Out-Null
           vendor/python/Scripts/spleeter separate -p spleeter:2stems -o .runtime/model-warmup .runtime/model-warmup-input/windows-silence.wav

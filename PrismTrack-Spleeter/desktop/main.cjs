@@ -64,6 +64,9 @@ function startServer() {
     env.FFMPEG_BINARY = path.join(ffmpegRoot, process.platform === "win32" ? "ffmpeg.exe" : "ffmpeg");
     env.PATH = `${ffmpegRoot}${path.delimiter}${process.env.PATH || ""}`;
     env.MODEL_PATH = path.join(process.resourcesPath, "pretrained_models");
+    env.GITHUB_HOST = "https://github.com";
+    env.GITHUB_REPOSITORY = "deezer/spleeter";
+    env.GITHUB_RELEASE = "v1.4.0";
   }
 
   serverProcess = spawn(nodeCommand, [serverScript], {
