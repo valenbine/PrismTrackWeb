@@ -89,15 +89,31 @@ jobs:
       - name: Prepare pretrained models
         working-directory: PrismTrack-Spleeter
         shell: pwsh
-        env:
-          GITHUB_HOST: https://github.com
-          GITHUB_REPOSITORY: deezer/spleeter
-          GITHUB_RELEASE: v1.4.0
         run: |
-          New-Item -ItemType Directory -Force -Path pretrained_models | Out-Null
-          vendor/python/Scripts/spleeter separate -p spleeter:2stems -o .runtime/model-warmup .runtime/model-warmup-input/windows-silence.wav
-          vendor/python/Scripts/spleeter separate -p spleeter:4stems -o .runtime/model-warmup .runtime/model-warmup-input/windows-silence.wav
-          vendor/python/Scripts/spleeter separate -p spleeter:5stems -o .runtime/model-warmup .runtime/model-warmup-input/windows-silence.wav
+          $release = "v1.4.0"
+          $baseUrl = "https://github.com/deezer/spleeter/releases/download/$release"
+          $downloadDir = ".runtime/model-downloads"
+          $modelsDir = "pretrained_models"
+          New-Item -ItemType Directory -Force -Path $downloadDir | Out-Null
+          New-Item -ItemType Directory -Force -Path $modelsDir | Out-Null
+
+          $checksums = @{
+            "2stems" = "f3a90b39dd2874269e8b05a48a86745df897b848c61f3958efc80a39152bd692"
+            "4stems" = "3adb4a50ad4eb18c7c4d65fcf4cf2367a07d48408a5eb7d03cd20067429dfaa8"
+            "5stems" = "25a1e87eb5f75cc72a4d2d5467a0a50ac75f05611f877c278793742513cc7218"
+          }
+
+          foreach ($model in @("2stems", "4stems", "5stems")) {
+            $archivePath = Join-Path $downloadDir "$model.tar.gz"
+            Invoke-WebRequest -Uri "$baseUrl/$model.tar.gz" -OutFile $archivePath
+            $actualHash = (Get-FileHash -Path $archivePath -Algorithm SHA256).Hash.ToLower()
+            if ($actualHash -ne $checksums[$model]) {
+              throw "Checksum mismatch for $model.tar.gz"
+            }
+            vendor/python/Scripts/python -c "import tarfile; tarfile.open(r'$archivePath').extractall(r'$modelsDir')"
+            $probePath = Join-Path (Join-Path $modelsDir $model) ".probe"
+            New-Item -ItemType File -Force -Path $probePath | Out-Null
+          }
 
       - name: Install Node dependencies
         working-directory: PrismTrack-Spleeter
