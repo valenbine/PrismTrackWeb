@@ -55,7 +55,6 @@ jobs:
         working-directory: PrismTrack-Spleeter
         shell: pwsh
         run: |
-          Add-Type -AssemblyName System.IO.Compression.FileSystem
           $path = ".github/windows-silence.wav"
           $sampleRate = 44100
           $seconds = 1
