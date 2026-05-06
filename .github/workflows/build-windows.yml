@@ -45,10 +45,13 @@ jobs:
         shell: pwsh
         run: |
           $pythonVersion = "3.10.11"
+          $runtimeDir = ".runtime"
           $pythonRoot = "vendor/python"
           $sitePackages = Join-Path $pythonRoot "Lib/site-packages"
-          $embedZip = ".runtime/python-embed.zip"
-          $getPip = ".runtime/get-pip.py"
+          $embedZip = Join-Path $runtimeDir "python-embed.zip"
+          $getPip = Join-Path $runtimeDir "get-pip.py"
+          New-Item -ItemType Directory -Force -Path $runtimeDir | Out-Null
+          New-Item -ItemType Directory -Force -Path $pythonRoot | Out-Null
           Invoke-WebRequest -Uri "https://www.python.org/ftp/python/$pythonVersion/python-$pythonVersion-embed-amd64.zip" -OutFile $embedZip
           Expand-Archive -Path $embedZip -DestinationPath $pythonRoot
           New-Item -ItemType Directory -Force -Path $sitePackages | Out-Null
