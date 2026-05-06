@@ -2,6 +2,8 @@
   "name": "prismtrack-spleeter",
   "version": "1.0.0",
   "private": true,
+  "description": "PrismTrack desktop and web app powered by Spleeter.",
+  "author": "valenbine",
   "type": "module",
   "main": "desktop/main.cjs",
   "scripts": {
@@ -12,7 +14,9 @@
     "generate:icons": "node scripts/generate-icons.cjs"
   },
   "dependencies": {
-    "archiver": "^7.0.1",
+    "archiver": "^7.0.1"
+  },
+  "devDependencies": {
     "electron": "^31.7.7",
     "electron-builder": "^24.13.3"
   },
