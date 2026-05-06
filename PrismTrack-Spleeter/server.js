@@ -11,7 +11,12 @@ const PORT = Number(process.env.PORT || 8000);
 const APP_RUNTIME_DIR = process.env.APP_RUNTIME_DIR || path.join(__dirname, ".runtime");
 const UPLOAD_DIR = path.join(APP_RUNTIME_DIR, "uploads");
 const SEPARATED_DIR = path.join(APP_RUNTIME_DIR, "prismtrack-stems");
-const SPLEETER_CANDIDATES = [process.env.SPLEETER, "spleeter", "/usr/local/bin/spleeter"].filter(Boolean);
+const SPLEETER_CANDIDATES = [
+  process.env.SPLEETER_PYTHON ? { command: process.env.SPLEETER_PYTHON, prefixArgs: ["-m", "spleeter"] } : null,
+  process.env.SPLEETER ? { command: process.env.SPLEETER, prefixArgs: [] } : null,
+  { command: "spleeter", prefixArgs: [] },
+  { command: "/usr/local/bin/spleeter", prefixArgs: [] },
+].filter(Boolean);
 let resolvedSpleeterCommand = null;
 const MAX_UPLOAD_BYTES = 120 * 1024 * 1024;
 const AUTO_DELETE_HOURS = 1;
@@ -71,8 +76,8 @@ server.listen(PORT, "0.0.0.0", () => {
 
 async function handleHealth(request, response) {
   try {
-    const spleeterCommand = await resolveSpleeterCommand();
-    const result = await runCommand(spleeterCommand, ["--help"], 5000);
+    const spleeterRuntime = await resolveSpleeterCommand();
+    const result = await runCommand(spleeterRuntime.command, [...spleeterRuntime.prefixArgs, "--help"], 5000);
     const spleeterAvailable = result.code === 0;
     const ffmpegResult = await runCommand("ffmpeg", ["-version"], 5000);
     const ffmpegAvailable = ffmpegResult.code === 0;
@@ -255,8 +260,8 @@ async function runSpleeter(job) {
   const commandArgs = ["separate", "-p", modelArg, "-o", job.outputDir];
   commandArgs.push(job.inputPath);
 
-  const spleeterCommand = await resolveSpleeterCommand();
-  const result = await runCommand(spleeterCommand, commandArgs, 600000);
+  const spleeterRuntime = await resolveSpleeterCommand();
+  const result = await runCommand(spleeterRuntime.command, [...spleeterRuntime.prefixArgs, ...commandArgs], 600000);
 
   if (result.code !== 0) {
     throw new Error(`Spleeter 执行失败: ${result.stderr || result.stdout}`);
@@ -338,7 +343,7 @@ async function resolveSpleeterCommand() {
 
   for (const command of SPLEETER_CANDIDATES) {
     try {
-      const result = await runCommand(command, ["--help"], 5000);
+      const result = await runCommand(command.command, [...command.prefixArgs, "--help"], 5000);
       if (result.code === 0) {
         resolvedSpleeterCommand = command;
         return command;

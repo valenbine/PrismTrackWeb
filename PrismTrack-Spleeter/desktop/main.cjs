@@ -53,10 +53,10 @@ async function startServer() {
   const appRuntimeDir = isPackaged ? path.join(app.getPath("userData"), "runtime") : path.join(appRoot, ".runtime");
   const serverScript = path.join(appRoot, "server.js");
   const pythonRoot = path.join(process.resourcesPath, "vendor", "python");
+  const pythonExecutable = process.platform === "win32"
+    ? path.join(pythonRoot, "python.exe")
+    : path.join(pythonRoot, "bin", "python3");
   const ffmpegRoot = path.join(process.resourcesPath, "vendor", "ffmpeg", "bin");
-  const spleeterBin = process.platform === "win32"
-    ? path.join(pythonRoot, "Scripts", "spleeter.exe")
-    : path.join(pythonRoot, "bin", "spleeter");
   const env = {
     ...process.env,
     PORT: String(APP_PORT),
@@ -65,9 +65,9 @@ async function startServer() {
   };
 
   if (isPackaged) {
-    env.SPLEETER = spleeterBin;
+    env.SPLEETER_PYTHON = pythonExecutable;
     env.FFMPEG_BINARY = path.join(ffmpegRoot, process.platform === "win32" ? "ffmpeg.exe" : "ffmpeg");
-    env.PATH = `${ffmpegRoot}${path.delimiter}${process.env.PATH || ""}`;
+    env.PATH = `${pythonRoot}${path.delimiter}${ffmpegRoot}${path.delimiter}${process.env.PATH || ""}`;
     env.MODEL_PATH = path.join(process.resourcesPath, "pretrained_models");
     env.GITHUB_HOST = "https://github.com";
     env.GITHUB_REPOSITORY = "deezer/spleeter";
