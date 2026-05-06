@@ -88,9 +88,9 @@ async function handleHealth(request, response) {
       ok: healthOk,
       version: healthOk ? "available" : "not ready",
       message: !spleeterAvailable
-        ? "未检测到 Spleeter，请安装: pip install --break-system-packages spleeter"
+        ? "未检测到 Spleeter，请检查桌面版内置 Python 运行时或 SPLEETER 配置"
         : !ffmpegAvailable
-          ? "未检测到 ffmpeg，请安装: apt-get install -y ffmpeg"
+          ? "未检测到 ffmpeg，请检查桌面版内置 ffmpeg 运行时是否完整"
           : !ffprobeAvailable
             ? "未检测到 ffprobe，请确认 ffmpeg 发行包包含 ffprobe 可执行文件"
           : "Spleeter 与 ffmpeg 可用",
