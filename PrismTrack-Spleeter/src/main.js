@@ -1096,8 +1096,13 @@ function updateDebugPolling(status, attempt) {
   const state = status?.status || "unknown";
   const progress = Number.isFinite(status?.progress) ? Math.max(0, Math.min(100, status.progress)) : 0;
   const message = status?.message || "无";
+  const stemDebug = status?.stemDebug
+    ? Object.entries(status.stemDebug)
+        .map(([stem, meta]) => `${stem}:${meta.parent}/${meta.fileName}`)
+        .join(", ")
+    : "无";
   const time = new Date().toLocaleTimeString("zh-CN", { hour12: false });
-  pollDebugLine.textContent = `状态=${state} | 进度=${progress}% | 轮询=${attempt} | 时间=${time} | 消息=${message}`;
+  pollDebugLine.textContent = `状态=${state} | 进度=${progress}% | 轮询=${attempt} | 时间=${time} | 消息=${message} | 文件=${stemDebug}`;
 }
 
 function updateStemVisibility(mode, availableStems = []) {

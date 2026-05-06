@@ -180,6 +180,15 @@ async function handleStatus(request, response, jobId) {
     separationMode: job.separationMode,
     error: job.error,
     stems: job.stems,
+    stemDebug: Object.fromEntries(
+      Object.entries(job.stems || {}).map(([stemName, filePath]) => [
+        stemName,
+        {
+          fileName: path.basename(filePath),
+          parent: path.basename(path.dirname(filePath)),
+        },
+      ])
+    ),
     message:
       job.status === "completed"
         ? "分轨完成"
