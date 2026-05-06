@@ -1,14 +1,15 @@
 const { app, BrowserWindow, shell } = require("electron");
-const { spawn } = require("child_process");
 const path = require("path");
 const http = require("http");
+const { pathToFileURL } = require("url");
 
 const APP_PORT = 8000;
 const APP_URL = `http://127.0.0.1:${APP_PORT}`;
 const isPackaged = app.isPackaged;
 
 let mainWindow = null;
-let serverProcess = null;
+let serverModulePromise = null;
+let serverModule = null;
 
 function getAppRoot() {
   return isPackaged ? app.getAppPath() : path.join(__dirname, "..");
@@ -43,9 +44,13 @@ function waitForServer(url, timeoutMs = 30000) {
   });
 }
 
-function startServer() {
+async function startServer() {
+  if (serverModulePromise) {
+    return serverModulePromise;
+  }
+
   const appRoot = getAppRoot();
-  const nodeCommand = process.execPath;
+  const appRuntimeDir = isPackaged ? path.join(app.getPath("userData"), "runtime") : path.join(appRoot, ".runtime");
   const serverScript = path.join(appRoot, "server.js");
   const pythonRoot = path.join(process.resourcesPath, "vendor", "python");
   const ffmpegRoot = path.join(process.resourcesPath, "vendor", "ffmpeg", "bin");
@@ -56,10 +61,10 @@ function startServer() {
     ...process.env,
     PORT: String(APP_PORT),
     NODE_ENV: isPackaged ? "production" : "development",
+    APP_RUNTIME_DIR: appRuntimeDir,
   };
 
   if (isPackaged) {
-    env.ELECTRON_RUN_AS_NODE = "1";
     env.SPLEETER = spleeterBin;
     env.FFMPEG_BINARY = path.join(ffmpegRoot, process.platform === "win32" ? "ffmpeg.exe" : "ffmpeg");
     env.PATH = `${ffmpegRoot}${path.delimiter}${process.env.PATH || ""}`;
@@ -69,20 +74,16 @@ function startServer() {
     env.GITHUB_RELEASE = "v1.4.0";
   }
 
-  serverProcess = spawn(nodeCommand, [serverScript], {
-    cwd: appRoot,
-    env,
-    stdio: "inherit",
-    windowsHide: true,
+  Object.assign(process.env, env);
+  serverModulePromise = import(pathToFileURL(serverScript).href).then((module) => {
+    serverModule = module;
+    return module;
   });
-
-  serverProcess.on("exit", () => {
-    serverProcess = null;
-  });
+  return serverModulePromise;
 }
 
 async function createWindow() {
-  startServer();
+  await startServer();
   await waitForServer(APP_URL);
 
   mainWindow = new BrowserWindow({
@@ -137,7 +138,7 @@ app.on("window-all-closed", () => {
 });
 
 app.on("before-quit", () => {
-  if (serverProcess) {
-    serverProcess.kill();
+  if (serverModule?.server?.listening) {
+    serverModule.server.close();
   }
 });

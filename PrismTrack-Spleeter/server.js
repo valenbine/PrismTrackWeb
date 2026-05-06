@@ -8,8 +8,9 @@ import archiver from "archiver";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT || 8000);
-const UPLOAD_DIR = path.join(__dirname, ".runtime", "uploads");
-const SEPARATED_DIR = path.join(__dirname, ".runtime", "prismtrack-stems");
+const APP_RUNTIME_DIR = process.env.APP_RUNTIME_DIR || path.join(__dirname, ".runtime");
+const UPLOAD_DIR = path.join(APP_RUNTIME_DIR, "uploads");
+const SEPARATED_DIR = path.join(APP_RUNTIME_DIR, "prismtrack-stems");
 const SPLEETER_CANDIDATES = [process.env.SPLEETER, "spleeter", "/usr/local/bin/spleeter"].filter(Boolean);
 let resolvedSpleeterCommand = null;
 const MAX_UPLOAD_BYTES = 120 * 1024 * 1024;
@@ -27,7 +28,7 @@ let activeJob = null;
 await mkdirAsync(UPLOAD_DIR, { recursive: true });
 await mkdirAsync(SEPARATED_DIR, { recursive: true });
 
-const server = http.createServer(async (request, response) => {
+export const server = http.createServer(async (request, response) => {
   try {
     if (request.method === "GET" && request.url === "/api/health") {
       return handleHealth(request, response);
@@ -358,7 +359,7 @@ async function cleanupDir(dirPath) {
 
 function runCommand(command, args, timeoutMs) {
   return new Promise((resolve) => {
-    const child = spawn(command, args, { cwd: __dirname, env: { ...process.env } });
+    const child = spawn(command, args, { cwd: APP_RUNTIME_DIR, env: { ...process.env } });
     let stdout = "";
     let stderr = "";
     const timer = setTimeout(() => {
