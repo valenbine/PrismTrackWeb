@@ -106,6 +106,9 @@ async function startServer() {
   const appRuntimeDir = isPackaged ? path.join(app.getPath("userData"), "runtime") : path.join(appRoot, ".runtime");
   const serverScript = path.join(appRoot, "server.js");
   const pythonRoot = path.join(process.resourcesPath, "vendor", "python");
+  const wrapperScript = isPackaged
+    ? path.join(process.resourcesPath, "scripts", "spleeter_separate.py")
+    : path.join(appRoot, "scripts", "spleeter_separate.py");
   const pythonExecutable = process.platform === "win32"
     ? path.join(pythonRoot, "python.exe")
     : path.join(pythonRoot, "bin", "python3");
@@ -119,6 +122,7 @@ async function startServer() {
 
   if (isPackaged) {
     env.SPLEETER_PYTHON = pythonExecutable;
+    env.SPLEETER_WRAPPER = wrapperScript;
     env.FFMPEG_BINARY = path.join(ffmpegRoot, process.platform === "win32" ? "ffmpeg.exe" : "ffmpeg");
     env.PATH = `${pythonRoot}${path.delimiter}${ffmpegRoot}${path.delimiter}${process.env.PATH || ""}`;
     env.MODEL_PATH = path.join(process.resourcesPath, "pretrained_models");
@@ -130,6 +134,10 @@ async function startServer() {
     env.GITHUB_HOST = "https://github.com";
     env.GITHUB_REPOSITORY = "deezer/spleeter";
     env.GITHUB_RELEASE = "v1.4.0";
+  }
+
+  if (!isPackaged) {
+    env.SPLEETER_WRAPPER = wrapperScript;
   }
 
   Object.assign(process.env, env);

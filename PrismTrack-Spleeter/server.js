@@ -12,9 +12,9 @@ const PORT = Number(process.env.PORT || 8000);
 const APP_RUNTIME_DIR = process.env.APP_RUNTIME_DIR || path.join(__dirname, ".runtime");
 const UPLOAD_DIR = path.join(APP_RUNTIME_DIR, "uploads");
 const SEPARATED_DIR = path.join(APP_RUNTIME_DIR, "prismtrack-stems");
-const SPLEETER_WRAPPER = path.join(__dirname, "scripts", "spleeter_separate.py");
+const SPLEETER_WRAPPER = process.env.SPLEETER_WRAPPER || path.join(__dirname, "scripts", "spleeter_separate.py");
 const SPLEETER_CANDIDATES = [
-  process.env.SPLEETER_PYTHON ? { command: process.env.SPLEETER_PYTHON, prefixArgs: ["-m", "spleeter"] } : null,
+  process.env.SPLEETER_PYTHON ? { command: process.env.SPLEETER_PYTHON, prefixArgs: [] } : null,
   process.env.SPLEETER ? { command: process.env.SPLEETER, prefixArgs: [] } : null,
   { command: "spleeter", prefixArgs: [] },
   { command: "/usr/local/bin/spleeter", prefixArgs: [] },
@@ -79,7 +79,9 @@ server.listen(PORT, "0.0.0.0", () => {
 async function handleHealth(request, response) {
   try {
     const spleeterRuntime = await resolveSpleeterCommand();
-    const result = await runCommand(spleeterRuntime.command, [...spleeterRuntime.prefixArgs, "--help"], 5000);
+    const result = process.env.SPLEETER_PYTHON
+      ? await runCommand(spleeterRuntime.command, [SPLEETER_WRAPPER, "--help"], 5000)
+      : await runCommand(spleeterRuntime.command, [...spleeterRuntime.prefixArgs, "--help"], 5000);
     const spleeterAvailable = result.code === 0;
     const ffmpegResult = await runCommand("ffmpeg", ["-version"], 5000);
     const ffmpegAvailable = ffmpegResult.code === 0;

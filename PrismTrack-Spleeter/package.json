@@ -31,13 +31,19 @@
       "index.html",
       "styles.css",
       "src/**/*",
-      "scripts/**/*",
       "server.js",
       "package.json",
       "package-lock.json",
       "favicon.svg"
     ],
     "extraResources": [
+      {
+        "from": "scripts",
+        "to": "scripts",
+        "filter": [
+          "**/*"
+        ]
+      },
       {
         "from": "vendor/python",
         "to": "vendor/python",

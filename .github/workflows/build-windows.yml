@@ -145,6 +145,7 @@ jobs:
         run: |
           $env:PATH = "$pwd/vendor/python;$pwd/vendor/ffmpeg/bin;$env:PATH"
           $env:MODEL_PATH = "$pwd/pretrained_models"
+          $env:SPLEETER_WRAPPER = "$pwd/scripts/spleeter_separate.py"
           $env:TF_ENABLE_ONEDNN_OPTS = "0"
           $env:TF_CPP_MIN_LOG_LEVEL = "2"
           $env:OMP_NUM_THREADS = "1"
