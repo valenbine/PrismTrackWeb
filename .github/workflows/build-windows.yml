@@ -52,10 +52,13 @@ jobs:
           }
           New-Item -ItemType Directory -Force -Path $pythonRoot | Out-Null
 
-          $hostPython = Split-Path (Split-Path (Get-Command python).Source -Parent) -Parent
+          $hostPython = Split-Path (Get-Command python).Source -Parent
           Write-Host "Bundling Python runtime from $hostPython"
 
           Copy-Item "$hostPython\*" $pythonRoot -Recurse -Force
+          if (-not (Test-Path "$pythonRoot/python.exe")) {
+            throw "Bundled python.exe was not found at $pythonRoot/python.exe"
+          }
 
           & "$pythonRoot/python.exe" -m pip install --upgrade pip
           & "$pythonRoot/python.exe" -m pip install --no-warn-script-location tensorflow==2.12.1 ffmpeg-python==0.2.0 httpx[http2]==0.19.0 norbert==0.2.1 numpy==1.24.3 pandas==1.5.3 typer==0.3.2
