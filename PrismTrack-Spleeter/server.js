@@ -78,11 +78,15 @@ server.listen(PORT, "0.0.0.0", () => {
 
 async function handleHealth(request, response) {
   try {
-    const spleeterRuntime = await resolveSpleeterCommand();
-    const result = process.env.SPLEETER_PYTHON
-      ? await runCommand(spleeterRuntime.command, [SPLEETER_WRAPPER, "--help"], 5000)
-      : await runCommand(spleeterRuntime.command, [...spleeterRuntime.prefixArgs, "--help"], 5000);
-    const spleeterAvailable = result.code === 0;
+    let spleeterAvailable = false;
+    if (process.env.SPLEETER_PYTHON) {
+      const result = await runCommand(process.env.SPLEETER_PYTHON, [SPLEETER_WRAPPER, "--help"], 5000);
+      spleeterAvailable = result.code === 0;
+    } else {
+      const spleeterRuntime = await resolveSpleeterCommand();
+      const result = await runCommand(spleeterRuntime.command, [...spleeterRuntime.prefixArgs, "--help"], 5000);
+      spleeterAvailable = result.code === 0;
+    }
     const ffmpegResult = await runCommand("ffmpeg", ["-version"], 5000);
     const ffmpegAvailable = ffmpegResult.code === 0;
     const ffprobeResult = await runCommand("ffprobe", ["-version"], 5000);
