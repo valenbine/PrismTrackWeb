@@ -151,7 +151,7 @@ jobs:
           $env:TF_NUM_INTRAOP_THREADS = "1"
           $env:TF_NUM_INTEROP_THREADS = "1"
           New-Item -ItemType Directory -Force -Path .runtime/model-warmup-output | Out-Null
-          vendor/python/python.exe -m spleeter separate -p spleeter:2stems -o .runtime/model-warmup-output .runtime/model-warmup-input/windows-silence.wav
+          vendor/python/python.exe scripts/spleeter_separate.py --model spleeter:2stems --output .runtime/model-warmup-output --input .runtime/model-warmup-input/windows-silence.wav
 
       - name: Install Node dependencies
         working-directory: PrismTrack-Spleeter

@@ -31,6 +31,7 @@
       "index.html",
       "styles.css",
       "src/**/*",
+      "scripts/**/*",
       "server.js",
       "package.json",
       "package-lock.json",

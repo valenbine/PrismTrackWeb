@@ -12,6 +12,7 @@ const PORT = Number(process.env.PORT || 8000);
 const APP_RUNTIME_DIR = process.env.APP_RUNTIME_DIR || path.join(__dirname, ".runtime");
 const UPLOAD_DIR = path.join(APP_RUNTIME_DIR, "uploads");
 const SEPARATED_DIR = path.join(APP_RUNTIME_DIR, "prismtrack-stems");
+const SPLEETER_WRAPPER = path.join(__dirname, "scripts", "spleeter_separate.py");
 const SPLEETER_CANDIDATES = [
   process.env.SPLEETER_PYTHON ? { command: process.env.SPLEETER_PYTHON, prefixArgs: ["-m", "spleeter"] } : null,
   process.env.SPLEETER ? { command: process.env.SPLEETER, prefixArgs: [] } : null,
@@ -263,16 +264,23 @@ async function runSpleeter(job) {
   job.progress = 5;
 
   const modelArg = normalizeModelForMode(job.model, job.separationMode);
-  const commandArgs = ["separate", "-p", modelArg, "-o", job.outputDir];
-  commandArgs.push(job.inputPath);
-
   const spleeterRuntime = await resolveSpleeterCommand();
+  const commandArgs = [
+    ...spleeterRuntime.prefixArgs,
+    SPLEETER_WRAPPER,
+    "--model",
+    modelArg,
+    "--output",
+    job.outputDir,
+    "--input",
+    job.inputPath,
+  ];
   console.log(`[Spleeter] Job ${job.id} start`);
   console.log(`[Spleeter] Job ${job.id} mode=${job.separationMode} model=${modelArg}`);
   console.log(`[Spleeter] Job ${job.id} input=${job.inputPath}`);
   console.log(`[Spleeter] Job ${job.id} output=${job.outputDir}`);
-  console.log(`[Spleeter] Job ${job.id} command=${formatCommand(spleeterRuntime.command, [...spleeterRuntime.prefixArgs, ...commandArgs])}`);
-  const result = await runCommand(spleeterRuntime.command, [...spleeterRuntime.prefixArgs, ...commandArgs], 600000);
+  console.log(`[Spleeter] Job ${job.id} command=${formatCommand(spleeterRuntime.command, commandArgs)}`);
+  const result = await runCommand(spleeterRuntime.command, commandArgs, 600000);
   console.log(`[Spleeter] Job ${job.id} exit=${result.code} error=${result.error || "none"}`);
   console.log(`[Spleeter] Job ${job.id} stdout:\n${result.stdout || "(empty)"}`);
   console.log(`[Spleeter] Job ${job.id} stderr:\n${result.stderr || "(empty)"}`);
