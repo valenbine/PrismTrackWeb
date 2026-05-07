@@ -63,7 +63,7 @@ jobs:
           & "$pythonRoot/python.exe" -m pip install --upgrade pip
           & "$pythonRoot/python.exe" -m pip install --no-warn-script-location tensorflow==2.12.1 ffmpeg-python==0.2.0 httpx[http2]==0.19.0 norbert==0.2.1 numpy==1.24.3 pandas==1.5.3 typer==0.3.2
           & "$pythonRoot/python.exe" -m pip install --no-warn-script-location spleeter==2.4.2 --no-deps
-          & "$pythonRoot/python.exe" -c "import sys, tensorflow, spleeter; print(sys.version); print(tensorflow.__version__); print(spleeter.__version__)"
+          & "$pythonRoot/python.exe" -c "import sys, tensorflow, spleeter; print(sys.version); print(tensorflow.__version__); print(spleeter.__file__)"
 
       - name: Prepare bundled ffmpeg
         working-directory: PrismTrack-Spleeter
