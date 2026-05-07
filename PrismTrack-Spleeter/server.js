@@ -292,6 +292,7 @@ async function runSpleeter(job) {
 
   job.stems = stems;
   job.stemDebug = await buildStemDebug(stems);
+  console.log(`[Spleeter] Job ${job.id} stem debug=${JSON.stringify(job.stemDebug, null, 2)}`);
 
   try {
     await unlink(job.inputPath).catch(() => {});

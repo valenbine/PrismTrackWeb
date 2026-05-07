@@ -6,7 +6,7 @@ const { pathToFileURL } = require("url");
 
 const APP_PORT = 8000;
 const isPackaged = app.isPackaged;
-const appArgs = process.argv.slice(1);
+const appArgs = process.argv;
 const prismDebugEnabled = appArgs.includes("--prism-debug");
 
 let mainWindow = null;
