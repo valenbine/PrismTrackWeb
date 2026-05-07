@@ -44,28 +44,23 @@ jobs:
         working-directory: PrismTrack-Spleeter
         shell: pwsh
         run: |
-          $pythonVersion = "3.10.11"
           $runtimeDir = ".runtime"
           $pythonRoot = "vendor/python"
-          $sitePackages = Join-Path $pythonRoot "Lib/site-packages"
-          $embedZip = Join-Path $runtimeDir "python-embed.zip"
-          $getPip = Join-Path $runtimeDir "get-pip.py"
           New-Item -ItemType Directory -Force -Path $runtimeDir | Out-Null
+          if (Test-Path $pythonRoot) {
+            Remove-Item -Recurse -Force $pythonRoot
+          }
           New-Item -ItemType Directory -Force -Path $pythonRoot | Out-Null
-          Invoke-WebRequest -Uri "https://www.python.org/ftp/python/$pythonVersion/python-$pythonVersion-embed-amd64.zip" -OutFile $embedZip
-          Expand-Archive -Path $embedZip -DestinationPath $pythonRoot
-          New-Item -ItemType Directory -Force -Path $sitePackages | Out-Null
-          @(
-            "python310.zip",
-            ".",
-            "Lib/site-packages",
-            "import site"
-          ) | Set-Content (Join-Path $pythonRoot "python310._pth")
-          Invoke-WebRequest -Uri "https://bootstrap.pypa.io/get-pip.py" -OutFile $getPip
-          & "$pythonRoot/python.exe" $getPip --no-warn-script-location
+
+          $hostPython = Split-Path (Split-Path (Get-Command python).Source -Parent) -Parent
+          Write-Host "Bundling Python runtime from $hostPython"
+
+          Copy-Item "$hostPython\*" $pythonRoot -Recurse -Force
+
           & "$pythonRoot/python.exe" -m pip install --upgrade pip
-          & "$pythonRoot/python.exe" -m pip install --no-warn-script-location --target "$sitePackages" tensorflow==2.12.1 ffmpeg-python==0.2.0 httpx[http2]==0.19.0 norbert==0.2.1 numpy==1.24.3 pandas==1.5.3 typer==0.3.2
-          & "$pythonRoot/python.exe" -m pip install --no-warn-script-location --target "$sitePackages" spleeter==2.4.2 --no-deps
+          & "$pythonRoot/python.exe" -m pip install --no-warn-script-location tensorflow==2.12.1 ffmpeg-python==0.2.0 httpx[http2]==0.19.0 norbert==0.2.1 numpy==1.24.3 pandas==1.5.3 typer==0.3.2
+          & "$pythonRoot/python.exe" -m pip install --no-warn-script-location spleeter==2.4.2 --no-deps
+          & "$pythonRoot/python.exe" -c "import sys, tensorflow, spleeter; print(sys.version); print(tensorflow.__version__); print(spleeter.__version__)"
 
       - name: Prepare bundled ffmpeg
         working-directory: PrismTrack-Spleeter
