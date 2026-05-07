@@ -43,6 +43,7 @@ PrismTrack.exe --prism-debug
 - 窗口加载地址自动变为 `http://127.0.0.1:8000/?debug=1`
 - 页面内调试反馈区域默认启用
 - Electron 主进程日志会写入本地日志文件
+- 后端会输出每次 Spleeter 的实际执行命令、stdout/stderr、扫描到的 wav 文件清单和最终 stem 映射
 
 日志文件位置：
 

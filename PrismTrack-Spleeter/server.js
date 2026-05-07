@@ -267,7 +267,15 @@ async function runSpleeter(job) {
   commandArgs.push(job.inputPath);
 
   const spleeterRuntime = await resolveSpleeterCommand();
+  console.log(`[Spleeter] Job ${job.id} start`);
+  console.log(`[Spleeter] Job ${job.id} mode=${job.separationMode} model=${modelArg}`);
+  console.log(`[Spleeter] Job ${job.id} input=${job.inputPath}`);
+  console.log(`[Spleeter] Job ${job.id} output=${job.outputDir}`);
+  console.log(`[Spleeter] Job ${job.id} command=${formatCommand(spleeterRuntime.command, [...spleeterRuntime.prefixArgs, ...commandArgs])}`);
   const result = await runCommand(spleeterRuntime.command, [...spleeterRuntime.prefixArgs, ...commandArgs], 600000);
+  console.log(`[Spleeter] Job ${job.id} exit=${result.code} error=${result.error || "none"}`);
+  console.log(`[Spleeter] Job ${job.id} stdout:\n${result.stdout || "(empty)"}`);
+  console.log(`[Spleeter] Job ${job.id} stderr:\n${result.stderr || "(empty)"}`);
 
   if (result.code !== 0) {
     throw new Error(`Spleeter 执行失败: ${result.stderr || result.stdout}`);
@@ -277,6 +285,7 @@ async function runSpleeter(job) {
   job.progress = 100;
 
   const stems = await collectSpleeterStems(job.outputDir, job.separationMode);
+  console.log(`[Spleeter] Job ${job.id} stem files=${JSON.stringify(stems, null, 2)}`);
   if (Object.keys(stems).length === 0) {
     throw new Error(`Spleeter 执行完成但未生成可用音轨。输出日志: ${result.stderr || result.stdout || "(empty)"}`);
   }
@@ -430,6 +439,7 @@ function normalizeSeparationMode(mode) {
 async function collectSpleeterStems(baseDir, separationMode) {
   const wavFiles = [];
   await walkWavFiles(baseDir, wavFiles);
+  console.log(`[Spleeter] Scan wav files under ${baseDir}:\n${wavFiles.length ? wavFiles.join("\n") : "(none)"}`);
 
   const byName = new Map();
   for (const filePath of wavFiles) {
@@ -500,6 +510,17 @@ async function walkWavFiles(dirPath, output) {
       output.push(fullPath);
     }
   }
+}
+
+function formatCommand(command, args) {
+  return [command, ...args].map(quoteShellArg).join(" ");
+}
+
+function quoteShellArg(value) {
+  if (/^[a-zA-Z0-9_./:-]+$/.test(value)) {
+    return value;
+  }
+  return JSON.stringify(value);
 }
 
 function parseMultipartStream(request, boundary, maxBytes) {
