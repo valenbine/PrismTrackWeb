@@ -1,15 +1,68 @@
 const { app, BrowserWindow, shell } = require("electron");
+const fs = require("fs");
 const path = require("path");
 const http = require("http");
 const { pathToFileURL } = require("url");
 
 const APP_PORT = 8000;
-const APP_URL = `http://127.0.0.1:${APP_PORT}`;
 const isPackaged = app.isPackaged;
+const appArgs = process.argv.slice(1);
+const prismDebugEnabled = appArgs.includes("--prism-debug");
 
 let mainWindow = null;
 let serverModulePromise = null;
 let serverModule = null;
+let logFilePath = null;
+
+function getAppUrl() {
+  return `http://127.0.0.1:${APP_PORT}${prismDebugEnabled ? "/?debug=1" : ""}`;
+}
+
+function appendLog(level, args) {
+  if (!logFilePath) {
+    return;
+  }
+  try {
+    const line = `${new Date().toISOString()} [${level}] ${args.map(formatLogArg).join(" ")}\n`;
+    fs.appendFileSync(logFilePath, line, "utf8");
+  } catch {}
+}
+
+function formatLogArg(value) {
+  if (value instanceof Error) {
+    return value.stack || value.message;
+  }
+  if (typeof value === "string") {
+    return value;
+  }
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
+}
+
+function setupLogging() {
+  const logDir = path.join(app.getPath("userData"), "logs");
+  fs.mkdirSync(logDir, { recursive: true });
+  logFilePath = path.join(logDir, "desktop.log");
+
+  const originalLog = console.log;
+  const originalError = console.error;
+
+  console.log = (...args) => {
+    appendLog("INFO", args);
+    originalLog(...args);
+  };
+
+  console.error = (...args) => {
+    appendLog("ERROR", args);
+    originalError(...args);
+  };
+
+  console.log(`[Desktop] Logging to ${logFilePath}`);
+  console.log(`[Desktop] prism debug: ${prismDebugEnabled ? "enabled" : "disabled"}`);
+}
 
 function getAppRoot() {
   return isPackaged ? app.getAppPath() : path.join(__dirname, "..");
@@ -83,8 +136,9 @@ async function startServer() {
 }
 
 async function createWindow() {
+  const appUrl = getAppUrl();
   await startServer();
-  await waitForServer(APP_URL);
+  await waitForServer("http://127.0.0.1:8000");
 
   mainWindow = new BrowserWindow({
     width: 1440,
@@ -106,16 +160,17 @@ async function createWindow() {
   });
 
   mainWindow.webContents.on("will-navigate", (event, url) => {
-    if (!url.startsWith(APP_URL)) {
+    if (!url.startsWith(`http://127.0.0.1:${APP_PORT}`)) {
       event.preventDefault();
       shell.openExternal(url);
     }
   });
 
-  await mainWindow.loadURL(APP_URL);
+  await mainWindow.loadURL(appUrl);
 }
 
 app.whenReady().then(() => {
+  setupLogging();
   createWindow().catch((error) => {
     console.error(error);
     app.quit();
