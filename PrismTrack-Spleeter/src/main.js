@@ -1098,7 +1098,11 @@ function updateDebugPolling(status, attempt) {
   const message = status?.message || "无";
   const stemDebug = status?.stemDebug
     ? Object.entries(status.stemDebug)
-        .map(([stem, meta]) => `${stem}:${meta.parent}/${meta.fileName}`)
+        .map(([stem, meta]) => {
+          const hash = typeof meta.sha256 === "string" ? meta.sha256.slice(0, 8) : "nohash";
+          const size = Number.isFinite(meta.size) ? meta.size : 0;
+          return `${stem}:${meta.parent}/${meta.fileName}/${size}/${hash}`;
+        })
         .join(", ")
     : "无";
   const time = new Date().toLocaleTimeString("zh-CN", { hour12: false });

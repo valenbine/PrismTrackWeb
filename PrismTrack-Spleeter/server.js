@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import { createReadStream, createWriteStream, unlink, existsSync } from "node:fs";
 import { mkdir as mkdirAsync, stat, rm, readdir } from "node:fs/promises";
+import { createHash } from "node:crypto";
 import http from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -180,15 +181,7 @@ async function handleStatus(request, response, jobId) {
     separationMode: job.separationMode,
     error: job.error,
     stems: job.stems,
-    stemDebug: Object.fromEntries(
-      Object.entries(job.stems || {}).map(([stemName, filePath]) => [
-        stemName,
-        {
-          fileName: path.basename(filePath),
-          parent: path.basename(path.dirname(filePath)),
-        },
-      ])
-    ),
+    stemDebug: job.stemDebug || {},
     message:
       job.status === "completed"
         ? "分轨完成"
@@ -289,6 +282,7 @@ async function runSpleeter(job) {
   }
 
   job.stems = stems;
+  job.stemDebug = await buildStemDebug(stems);
 
   try {
     await unlink(job.inputPath).catch(() => {});
@@ -463,6 +457,35 @@ async function collectSpleeterStems(baseDir, separationMode) {
   }
 
   return stems;
+}
+
+async function buildStemDebug(stems) {
+  const entries = await Promise.all(
+    Object.entries(stems || {}).map(async ([stemName, filePath]) => {
+      const fileStat = await stat(filePath);
+      return [
+        stemName,
+        {
+          fileName: path.basename(filePath),
+          parent: path.basename(path.dirname(filePath)),
+          size: fileStat.size,
+          sha256: await sha256File(filePath),
+        },
+      ];
+    })
+  );
+
+  return Object.fromEntries(entries);
+}
+
+async function sha256File(filePath) {
+  return new Promise((resolve, reject) => {
+    const hash = createHash("sha256");
+    const stream = createReadStream(filePath);
+    stream.on("data", (chunk) => hash.update(chunk));
+    stream.on("end", () => resolve(hash.digest("hex")));
+    stream.on("error", reject);
+  });
 }
 
 async function walkWavFiles(dirPath, output) {
