@@ -122,6 +122,11 @@ async function startServer() {
     env.FFMPEG_BINARY = path.join(ffmpegRoot, process.platform === "win32" ? "ffmpeg.exe" : "ffmpeg");
     env.PATH = `${pythonRoot}${path.delimiter}${ffmpegRoot}${path.delimiter}${process.env.PATH || ""}`;
     env.MODEL_PATH = path.join(process.resourcesPath, "pretrained_models");
+    env.TF_ENABLE_ONEDNN_OPTS = "0";
+    env.TF_CPP_MIN_LOG_LEVEL = "2";
+    env.OMP_NUM_THREADS = "1";
+    env.TF_NUM_INTRAOP_THREADS = "1";
+    env.TF_NUM_INTEROP_THREADS = "1";
     env.GITHUB_HOST = "https://github.com";
     env.GITHUB_REPOSITORY = "deezer/spleeter";
     env.GITHUB_RELEASE = "v1.4.0";
