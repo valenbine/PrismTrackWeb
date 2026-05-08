@@ -34,6 +34,32 @@ jobs:
           cache: "npm"
           cache-dependency-path: PrismTrack-Spleeter/package-lock.json
 
+      - name: Prepare Windows runtime baseline
+        run: |
+          $zipUrl = "https://makenweb.com/downloads/SpleeterGUI_2.9.4.0.zip"
+          $zipPath = Join-Path $env:RUNNER_TEMP "SpleeterGUI_2.9.4.0.zip"
+          $extractRoot = Join-Path $env:RUNNER_TEMP "spleetergui-runtime"
+          $sourceRoot = Join-Path $extractRoot "SpleeterGUI_2.9.4.0/SpleeterGUI"
+
+          if (-not (Test-Path $zipPath)) {
+            Invoke-WebRequest -Uri $zipUrl -OutFile $zipPath
+          }
+
+          if (Test-Path $extractRoot) {
+            Remove-Item $extractRoot -Recurse -Force
+          }
+          New-Item -ItemType Directory -Path $extractRoot | Out-Null
+
+          Expand-Archive -Path $zipPath -DestinationPath $extractRoot -Force
+
+          if (Test-Path "python") {
+            Remove-Item "python" -Recurse -Force
+          }
+          Copy-Item (Join-Path $sourceRoot "python") -Destination "python" -Recurse
+          Copy-Item (Join-Path $sourceRoot "ffmpeg.exe") -Destination "ffmpeg.exe" -Force
+          Copy-Item (Join-Path $sourceRoot "ffprobe.exe") -Destination "ffprobe.exe" -Force
+          Copy-Item (Join-Path $sourceRoot "ffplay.exe") -Destination "ffplay.exe" -Force
+
       - name: Verify required Windows runtime files
         run: |
           $required = @(
