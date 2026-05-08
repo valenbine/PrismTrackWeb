@@ -1,4 +1,4 @@
-name: Build Windows App
+name: Build PrismTrack Windows
 
 on:
   workflow_dispatch:
@@ -6,171 +6,68 @@ on:
     branches:
       - main
       - master
-      - 260504-feat-prismtrack-spleeter-migration
+      - "260504-feat-prismtrack-spleeter-migration"
+    paths:
+      - ".github/workflows/build-windows.yml"
+      - "PrismTrack-Spleeter/**"
+  pull_request:
+    paths:
+      - ".github/workflows/build-windows.yml"
+      - "PrismTrack-Spleeter/**"
 
 jobs:
   build-windows:
     runs-on: windows-latest
-    env:
-      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+    defaults:
+      run:
+        shell: pwsh
+        working-directory: PrismTrack-Spleeter
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v4
         with:
-          node-version: 20
-          cache: npm
+          node-version: "24"
+          cache: "npm"
           cache-dependency-path: PrismTrack-Spleeter/package-lock.json
 
-      - name: Setup Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: "3.10"
-
-      - name: Install ffmpeg
-        shell: pwsh
-        run: choco install ffmpeg -y
-
-      - name: Install Spleeter
-        working-directory: PrismTrack-Spleeter
+      - name: Verify required Windows runtime files
         run: |
-          pip install tensorflow==2.12.1 ffmpeg-python==0.2.0 httpx[http2]==0.19.0 norbert==0.2.1 numpy==1.24.3 pandas==1.5.3 typer==0.3.2
-          pip install spleeter==2.4.2 --no-deps
+          $required = @(
+            "python/python.exe",
+            "ffmpeg.exe",
+            "ffprobe.exe",
+            "ffplay.exe",
+            "scripts/spleeter_separate.py"
+          )
 
-      - name: Prepare bundled Python runtime
-        working-directory: PrismTrack-Spleeter
-        shell: pwsh
-        run: |
-          $runtimeDir = ".runtime"
-          $pythonRoot = "vendor/python"
-          New-Item -ItemType Directory -Force -Path $runtimeDir | Out-Null
-          if (Test-Path $pythonRoot) {
-            Remove-Item -Recurse -Force $pythonRoot
-          }
-          New-Item -ItemType Directory -Force -Path $pythonRoot | Out-Null
-
-          $hostPython = Split-Path (Get-Command python).Source -Parent
-          Write-Host "Bundling Python runtime from $hostPython"
-
-          Copy-Item "$hostPython\*" $pythonRoot -Recurse -Force
-          if (-not (Test-Path "$pythonRoot/python.exe")) {
-            throw "Bundled python.exe was not found at $pythonRoot/python.exe"
-          }
-
-          & "$pythonRoot/python.exe" -m pip install --upgrade pip
-          & "$pythonRoot/python.exe" -m pip install --no-warn-script-location tensorflow==2.12.1 ffmpeg-python==0.2.0 httpx[http2]==0.19.0 norbert==0.2.1 numpy==1.24.3 pandas==1.5.3 typer==0.3.2
-          & "$pythonRoot/python.exe" -m pip install --no-warn-script-location spleeter==2.4.2 --no-deps
-          $env:TF_ENABLE_ONEDNN_OPTS = "0"
-          $env:TF_CPP_MIN_LOG_LEVEL = "2"
-          $env:OMP_NUM_THREADS = "1"
-          $env:TF_NUM_INTRAOP_THREADS = "1"
-          $env:TF_NUM_INTEROP_THREADS = "1"
-          & "$pythonRoot/python.exe" -c "import sys, tensorflow, spleeter; print(sys.version); print(tensorflow.__version__); print(spleeter.__file__)"
-
-      - name: Prepare bundled ffmpeg
-        working-directory: PrismTrack-Spleeter
-        shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Force -Path vendor/ffmpeg/bin | Out-Null
-          Copy-Item "C:/ProgramData/chocolatey/lib/ffmpeg/tools/ffmpeg/bin/ffmpeg.exe" "vendor/ffmpeg/bin/ffmpeg.exe"
-          Copy-Item "C:/ProgramData/chocolatey/lib/ffmpeg/tools/ffmpeg/bin/ffprobe.exe" "vendor/ffmpeg/bin/ffprobe.exe"
-
-      - name: Generate warmup audio
-        working-directory: PrismTrack-Spleeter
-        shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Force -Path .runtime/model-warmup-input | Out-Null
-          $path = ".runtime/model-warmup-input/windows-silence.wav"
-          $sampleRate = 44100
-          $seconds = 1
-          $channels = 2
-          $bitsPerSample = 16
-          $samples = $sampleRate * $seconds
-          $blockAlign = $channels * ($bitsPerSample / 8)
-          $byteRate = $sampleRate * $blockAlign
-          $dataSize = $samples * $blockAlign
-          $fs = [System.IO.File]::Open($path, [System.IO.FileMode]::Create)
-          $bw = New-Object System.IO.BinaryWriter($fs)
-          $bw.Write([System.Text.Encoding]::ASCII.GetBytes("RIFF"))
-          $bw.Write([int](36 + $dataSize))
-          $bw.Write([System.Text.Encoding]::ASCII.GetBytes("WAVE"))
-          $bw.Write([System.Text.Encoding]::ASCII.GetBytes("fmt "))
-          $bw.Write([int]16)
-          $bw.Write([short]1)
-          $bw.Write([short]$channels)
-          $bw.Write([int]$sampleRate)
-          $bw.Write([int]$byteRate)
-          $bw.Write([short]$blockAlign)
-          $bw.Write([short]$bitsPerSample)
-          $bw.Write([System.Text.Encoding]::ASCII.GetBytes("data"))
-          $bw.Write([int]$dataSize)
-          for ($i = 0; $i -lt $samples * $channels; $i++) { $bw.Write([short]0) }
-          $bw.Close()
-
-      - name: Prepare pretrained models
-        working-directory: PrismTrack-Spleeter
-        shell: pwsh
-        run: |
-          $release = "v1.4.0"
-          $baseUrl = "https://github.com/deezer/spleeter/releases/download/$release"
-          $downloadDir = ".runtime/model-downloads"
-          $modelsDir = "pretrained_models"
-          New-Item -ItemType Directory -Force -Path $downloadDir | Out-Null
-          New-Item -ItemType Directory -Force -Path $modelsDir | Out-Null
-
-          $checksums = @{
-            "2stems" = "f3a90b39dd2874269e8b05a48a86745df897b848c61f3958efc80a39152bd692"
-            "4stems" = "3adb4a50ad4eb18c7c4d65fcf4cf2367a07d48408a5eb7d03cd20067429dfaa8"
-            "5stems" = "25a1e87eb5f75cc72a4d2d5467a0a50ac75f05611f877c278793742513cc7218"
-          }
-
-          foreach ($model in @("2stems", "4stems", "5stems")) {
-            $archivePath = Join-Path $downloadDir "$model.tar.gz"
-            Invoke-WebRequest -Uri "$baseUrl/$model.tar.gz" -OutFile $archivePath
-            $actualHash = (Get-FileHash -Path $archivePath -Algorithm SHA256).Hash.ToLower()
-            if ($actualHash -ne $checksums[$model]) {
-              throw "Checksum mismatch for $model.tar.gz"
+          $missing = @()
+          foreach ($item in $required) {
+            if (-not (Test-Path $item)) {
+              $missing += $item
             }
-            vendor/python/python.exe -c "import tarfile; tarfile.open(r'$archivePath').extractall(r'$modelsDir')"
-            $probePath = Join-Path (Join-Path $modelsDir $model) ".probe"
-            New-Item -ItemType File -Force -Path $probePath | Out-Null
           }
 
-      - name: Smoke test bundled Spleeter runtime
-        working-directory: PrismTrack-Spleeter
-        shell: pwsh
-        run: |
-          $env:PATH = "$pwd/vendor/python;$pwd/vendor/ffmpeg/bin;$env:PATH"
-          $env:MODEL_PATH = "$pwd/pretrained_models"
-          $env:SPLEETER_WRAPPER = "$pwd/scripts/spleeter_separate.py"
-          $env:TF_ENABLE_ONEDNN_OPTS = "0"
-          $env:TF_CPP_MIN_LOG_LEVEL = "2"
-          $env:OMP_NUM_THREADS = "1"
-          $env:TF_NUM_INTRAOP_THREADS = "1"
-          $env:TF_NUM_INTEROP_THREADS = "1"
-          New-Item -ItemType Directory -Force -Path .runtime/model-warmup-output | Out-Null
-          vendor/python/python.exe scripts/spleeter_separate.py --model spleeter:2stems --output .runtime/model-warmup-output --input .runtime/model-warmup-input/windows-silence.wav
+          if ($missing.Count -gt 0) {
+            Write-Error "Missing required runtime files:`n$($missing -join "`n")"
+            exit 1
+          }
 
-      - name: Install Node dependencies
-        working-directory: PrismTrack-Spleeter
-        run: npm install
-
-      - name: Generate Windows icon set
-        working-directory: PrismTrack-Spleeter
-        run: npm run generate:icons
+      - name: Install dependencies
+        run: npm ci
 
       - name: Build Windows installer
-        working-directory: PrismTrack-Spleeter
         run: npm run dist:win
 
-      - name: Upload installer artifacts
-        uses: actions/upload-artifact@v7
+      - name: Upload Windows artifacts
+        uses: actions/upload-artifact@v4
         with:
-          name: PrismTrack-windows
+          name: prismtrack-windows-${{ github.run_number }}
           path: |
-            PrismTrack-Spleeter/release/*.exe
-            PrismTrack-Spleeter/release/*.blockmap
-            PrismTrack-Spleeter/release/latest*.yml
+            PrismTrack-Spleeter/dist/**/*.exe
+            PrismTrack-Spleeter/dist/**/*.zip
+            PrismTrack-Spleeter/dist/**/*.yml
+          if-no-files-found: error
