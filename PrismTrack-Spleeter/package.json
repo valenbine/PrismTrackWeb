@@ -2,68 +2,61 @@
   "name": "prismtrack-spleeter",
   "version": "1.0.0",
   "private": true,
-  "description": "PrismTrack desktop and web app powered by Spleeter.",
+  "description": "PrismTrack web app powered by Spleeter.",
   "author": "valenbine",
-  "type": "module",
   "main": "desktop/main.cjs",
+  "type": "module",
   "scripts": {
     "start": "node server.js",
     "dev": "node server.js",
     "desktop": "electron .",
-    "dist:win": "electron-builder --win nsis",
-    "generate:icons": "node scripts/generate-icons.cjs"
+    "dist:win": "electron-builder --win nsis"
   },
   "dependencies": {
     "archiver": "^7.0.1"
   },
   "devDependencies": {
-    "electron": "^31.7.7",
-    "electron-builder": "^24.13.3"
+    "electron": "^33.2.1",
+    "electron-builder": "^25.1.8"
   },
   "build": {
     "appId": "com.valenbine.prismtrack",
     "productName": "PrismTrack",
+    "asar": false,
     "directories": {
-      "output": "release"
+      "output": "dist"
     },
     "files": [
       "desktop/**/*",
-      "index.html",
-      "styles.css",
-      "src/**/*",
       "server.js",
       "package.json",
       "package-lock.json",
+      "index.html",
+      "styles.css",
+      "src/**/*",
+      "scripts/**/*",
+      "pretrained_models/**/*",
       "favicon.svg"
     ],
-    "extraResources": [
+    "extraFiles": [
       {
-        "from": "scripts",
-        "to": "scripts",
+        "from": "python",
+        "to": "python",
         "filter": [
           "**/*"
         ]
       },
       {
-        "from": "vendor/python",
-        "to": "vendor/python",
-        "filter": [
-          "**/*"
-        ]
+        "from": "ffmpeg.exe",
+        "to": "ffmpeg.exe"
       },
       {
-        "from": "vendor/ffmpeg",
-        "to": "vendor/ffmpeg",
-        "filter": [
-          "**/*"
-        ]
+        "from": "ffprobe.exe",
+        "to": "ffprobe.exe"
       },
       {
-        "from": "pretrained_models",
-        "to": "pretrained_models",
-        "filter": [
-          "**/*"
-        ]
+        "from": "ffplay.exe",
+        "to": "ffplay.exe"
       }
     ],
     "win": {
@@ -74,15 +67,12 @@
             "x64"
           ]
         }
-      ],
-      "icon": "build/icons/prismtrack.ico"
+      ]
     },
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
-      "createDesktopShortcut": true,
-      "createStartMenuShortcut": true,
-      "shortcutName": "PrismTrack"
+      "artifactName": "PrismTrack-Setup-${version}.${ext}"
     }
   }
 }

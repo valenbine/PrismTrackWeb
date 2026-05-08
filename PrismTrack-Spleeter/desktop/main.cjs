@@ -1,166 +1,334 @@
-const { app, BrowserWindow, shell } = require("electron");
-const fs = require("fs");
-const path = require("path");
-const http = require("http");
-const { pathToFileURL } = require("url");
+const { app, BrowserWindow, shell, dialog } = require("electron");
+const { spawn } = require("node:child_process");
+const fs = require("node:fs");
+const path = require("node:path");
+const http = require("node:http");
 
-const APP_PORT = 8000;
-const isPackaged = app.isPackaged;
-const appArgs = process.argv;
-const prismDebugEnabled = appArgs.includes("--prism-debug");
+const isDev = !app.isPackaged;
+const appRoot = isDev ? path.resolve(__dirname, "..") : process.resourcesPath;
+const entryUrl = process.env.PRISMTRACK_DESKTOP_URL || "http://127.0.0.1:8000/";
+const serverPort = Number(new URL(entryUrl).port || 8000);
+const localRuntimeRoot = appRoot;
+const localPythonPath = path.join(localRuntimeRoot, "python", "python.exe");
+const localFfmpegPath = path.join(localRuntimeRoot, "ffmpeg.exe");
+const localFfprobePath = path.join(localRuntimeRoot, "ffprobe.exe");
+const localWrapperPath = path.join(localRuntimeRoot, "scripts", "spleeter_separate.py");
 
 let mainWindow = null;
-let serverModulePromise = null;
-let serverModule = null;
-let logFilePath = null;
+let serverProcess = null;
+let shuttingDown = false;
+let serverStderrBuffer = "";
 
-function getAppUrl() {
-  return `http://127.0.0.1:${APP_PORT}${prismDebugEnabled ? "/?debug=1" : ""}`;
+function resolveNodeCommand() {
+  return process.execPath;
 }
 
-function appendLog(level, args) {
-  if (!logFilePath) {
+function buildServerEnv() {
+  return {
+    ...process.env,
+    PORT: String(serverPort),
+    APP_RUNTIME_DIR: path.join(app.getPath("userData"), ".runtime"),
+    SPLEETER_MODEL_PATH: path.join(app.getPath("userData"), "pretrained_models"),
+    SPLEETER_WRAPPER: localWrapperPath,
+  };
+}
+
+function getWindowsRuntimeValidation() {
+  const requiredFiles = [
+    {
+      label: "Python 运行时",
+      relativePath: path.join("python", "python.exe"),
+      absolutePath: localPythonPath,
+    },
+    {
+      label: "ffmpeg",
+      relativePath: "ffmpeg.exe",
+      absolutePath: localFfmpegPath,
+    },
+    {
+      label: "ffprobe",
+      relativePath: "ffprobe.exe",
+      absolutePath: localFfprobePath,
+    },
+    {
+      label: "Spleeter 包装脚本",
+      relativePath: path.join("scripts", "spleeter_separate.py"),
+      absolutePath: localWrapperPath,
+    },
+  ];
+
+  const missingFiles = requiredFiles.filter((item) => !fs.existsSync(item.absolutePath));
+  return {
+    ok: missingFiles.length === 0,
+    missingFiles,
+  };
+}
+
+function buildWindowsRuntimeErrorMessage(validation) {
+  const missingList = validation.missingFiles
+    .map((item) => `- ${item.label}: ${item.relativePath}`)
+    .join("\n");
+
+  return [
+    "未检测到完整的 PrismTrack Windows 本地运行时，应用无法启动。",
+    "",
+    "缺失文件:",
+    missingList,
+    "",
+    `当前检测目录: ${localRuntimeRoot}`,
+    "",
+    "请确认安装包内容完整，或在应用目录中补齐以下结构后重试:",
+    "python/python.exe",
+    "ffmpeg.exe",
+    "ffprobe.exe",
+    "scripts/spleeter_separate.py",
+    "",
+    "如果这是自行打包的版本，请先确认 electron-builder 已正确包含 extraFiles。",
+  ].join("\n");
+}
+
+function hasVcRuntimeError(text) {
+  if (!text) {
+    return false;
+  }
+
+  return /vcruntime\d*\.dll|msvcp\d*\.dll|side-by-side configuration/i.test(text);
+}
+
+function buildVcRuntimeErrorMessage(details = "") {
+  return [
+    "检测到 Windows VC Runtime 运行库缺失或损坏，PrismTrack 无法正常调用本地 Python 运行时。",
+    "",
+    "请在系统中安装或修复 Microsoft Visual C++ Redistributable（建议 x64 版本）。",
+    "",
+    "常见缺失文件包括：VCRUNTIME140.dll、VCRUNTIME140_1.dll、MSVCP140.dll",
+    details ? "" : null,
+    details ? `诊断信息: ${details}` : null,
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
+function formatStderrSnippet(maxLength = 1600) {
+  const text = (serverStderrBuffer || "").trim();
+  if (!text) {
+    return "";
+  }
+
+  if (text.length <= maxLength) {
+    return text;
+  }
+
+  return text.slice(-maxLength);
+}
+
+function buildStartupFailureMessage(baseMessage, diagnostics = {}) {
+  const lines = [baseMessage];
+  const healthStatus = diagnostics.healthStatusCode;
+  const healthMessage = diagnostics.healthMessage;
+  const runtimeSummary = diagnostics.runtimeSummary;
+  const stderrSnippet = diagnostics.stderrSnippet;
+
+  if (healthStatus || healthMessage || runtimeSummary) {
+    lines.push("");
+    lines.push("健康检查诊断:");
+    if (healthStatus) {
+      lines.push(`- HTTP 状态码: ${healthStatus}`);
+    }
+    if (healthMessage) {
+      lines.push(`- 服务消息: ${healthMessage}`);
+    }
+    if (runtimeSummary) {
+      lines.push(`- 运行时: ${runtimeSummary}`);
+    }
+  }
+
+  if (stderrSnippet) {
+    lines.push("");
+    lines.push("服务错误输出(末尾片段):");
+    lines.push(stderrSnippet);
+  }
+
+  return lines.join("\n");
+}
+
+function assertRuntimeReady() {
+  if (process.platform !== "win32") {
     return;
   }
-  try {
-    const line = `${new Date().toISOString()} [${level}] ${args.map(formatLogArg).join(" ")}\n`;
-    fs.appendFileSync(logFilePath, line, "utf8");
-  } catch {}
+
+  const validation = getWindowsRuntimeValidation();
+  if (!validation.ok) {
+    throw new Error(buildWindowsRuntimeErrorMessage(validation));
+  }
 }
 
-function formatLogArg(value) {
-  if (value instanceof Error) {
-    return value.stack || value.message;
+function ensureUserDirectories() {
+  const runtimeDir = path.join(app.getPath("userData"), ".runtime");
+  const modelDir = path.join(app.getPath("userData"), "pretrained_models");
+  fs.mkdirSync(runtimeDir, { recursive: true });
+  fs.mkdirSync(modelDir, { recursive: true });
+}
+
+function startServer() {
+  if (serverProcess) {
+    return;
   }
-  if (typeof value === "string") {
-    return value;
+
+  ensureUserDirectories();
+  serverStderrBuffer = "";
+
+  const serverScript = path.join(appRoot, "server.js");
+  serverProcess = spawn(resolveNodeCommand(), [serverScript], {
+    cwd: appRoot,
+    env: buildServerEnv(),
+    stdio: ["ignore", "pipe", "pipe"],
+    windowsHide: true,
+  });
+
+  serverProcess.stdout?.on("data", (chunk) => {
+    process.stdout.write(`[desktop-server] ${chunk}`);
+  });
+
+  serverProcess.stderr?.on("data", (chunk) => {
+    serverStderrBuffer += chunk.toString();
+    if (serverStderrBuffer.length > 24000) {
+      serverStderrBuffer = serverStderrBuffer.slice(-24000);
+    }
+    process.stderr.write(`[desktop-server] ${chunk}`);
+  });
+
+  serverProcess.on("exit", (code) => {
+    const crashedUnexpectedly = !shuttingDown && code !== 0;
+    serverProcess = null;
+    if (crashedUnexpectedly) {
+      const message = hasVcRuntimeError(serverStderrBuffer)
+        ? buildVcRuntimeErrorMessage(`本地服务进程异常退出，退出码: ${code}`)
+        : buildStartupFailureMessage(`本地服务进程异常退出，退出码: ${code}`, {
+            stderrSnippet: formatStderrSnippet(),
+          });
+      dialog.showErrorBox("PrismTrack 启动失败", message);
+      app.quit();
+    }
+  });
+}
+
+function requestHealth(url) {
+  return new Promise((resolve, reject) => {
+    const request = http.get(`${url}api/health`, (response) => {
+      let body = "";
+      response.setEncoding("utf8");
+      response.on("data", (chunk) => {
+        body += chunk;
+      });
+      response.on("end", () => {
+        try {
+          const payload = JSON.parse(body || "{}");
+          resolve({ statusCode: response.statusCode, payload });
+        } catch {
+          resolve({ statusCode: response.statusCode, payload: null });
+        }
+      });
+    });
+
+    request.on("error", reject);
+    request.setTimeout(3000, () => {
+      request.destroy(new Error("health 请求超时"));
+    });
+  });
+}
+
+async function assertWindowsHealthRuntime(url) {
+  if (process.platform !== "win32") {
+    return;
   }
+
+  const { payload } = await requestHealth(url);
+  const spleeterError = payload?.checks?.spleeter?.error || "";
+  const ffmpegError = payload?.checks?.ffmpeg?.error || "";
+  const ffprobeError = payload?.checks?.ffprobe?.error || "";
+  const joinedErrors = [spleeterError, ffmpegError, ffprobeError].filter(Boolean).join("\n");
+
+  if (hasVcRuntimeError(joinedErrors)) {
+    throw new Error(buildVcRuntimeErrorMessage("来自 /api/health 的运行时诊断"));
+  }
+}
+
+function summarizeRuntime(payload) {
+  const runtime = payload?.runtime;
+  if (!runtime) {
+    return "";
+  }
+
+  const python = runtime.python?.command || "unknown";
+  const ffmpeg = runtime.ffmpeg?.command || "unknown";
+  const ffprobe = runtime.ffprobe?.command || "unknown";
+  return `python=${python}, ffmpeg=${ffmpeg}, ffprobe=${ffprobe}`;
+}
+
+async function collectStartupDiagnostics(url) {
+  const diagnostics = {
+    stderrSnippet: formatStderrSnippet(),
+  };
+
   try {
-    return JSON.stringify(value);
+    const { statusCode, payload } = await requestHealth(url);
+    diagnostics.healthStatusCode = statusCode || null;
+    diagnostics.healthMessage = payload?.message || "";
+    diagnostics.runtimeSummary = summarizeRuntime(payload);
   } catch {
-    return String(value);
+    // Ignore health probe errors and rely on stderr diagnostics.
   }
-}
 
-function setupLogging() {
-  const logDir = path.join(app.getPath("userData"), "logs");
-  fs.mkdirSync(logDir, { recursive: true });
-  logFilePath = path.join(logDir, "desktop.log");
-
-  const originalLog = console.log;
-  const originalError = console.error;
-
-  console.log = (...args) => {
-    appendLog("INFO", args);
-    originalLog(...args);
-  };
-
-  console.error = (...args) => {
-    appendLog("ERROR", args);
-    originalError(...args);
-  };
-
-  console.log(`[Desktop] Logging to ${logFilePath}`);
-  console.log(`[Desktop] prism debug: ${prismDebugEnabled ? "enabled" : "disabled"}`);
-}
-
-function getAppRoot() {
-  return isPackaged ? app.getAppPath() : path.join(__dirname, "..");
+  return diagnostics;
 }
 
 function waitForServer(url, timeoutMs = 30000) {
   const startedAt = Date.now();
 
   return new Promise((resolve, reject) => {
-    const probe = () => {
-      const request = http.get(`${url}/api/health`, (response) => {
+    const attempt = () => {
+      const request = http.get(`${url}api/health`, (response) => {
         response.resume();
-        if (response.statusCode && response.statusCode < 500) {
+        if (response.statusCode === 200) {
           resolve();
           return;
         }
-        retry();
+        retryOrFail();
       });
 
-      request.on("error", retry);
+      request.on("error", retryOrFail);
+      request.setTimeout(2000, () => {
+        request.destroy();
+        retryOrFail();
+      });
     };
 
-    const retry = () => {
+    const retryOrFail = () => {
       if (Date.now() - startedAt >= timeoutMs) {
-        reject(new Error("PrismTrack server startup timed out."));
+        reject(new Error("等待本地服务启动超时"));
         return;
       }
-      setTimeout(probe, 500);
+      setTimeout(attempt, 500);
     };
 
-    probe();
+    attempt();
   });
-}
-
-async function startServer() {
-  if (serverModulePromise) {
-    return serverModulePromise;
-  }
-
-  const appRoot = getAppRoot();
-  const appRuntimeDir = isPackaged ? path.join(app.getPath("userData"), "runtime") : path.join(appRoot, ".runtime");
-  const serverScript = path.join(appRoot, "server.js");
-  const pythonRoot = path.join(process.resourcesPath, "vendor", "python");
-  const wrapperScript = isPackaged
-    ? path.join(process.resourcesPath, "scripts", "spleeter_separate.py")
-    : path.join(appRoot, "scripts", "spleeter_separate.py");
-  const pythonExecutable = process.platform === "win32"
-    ? path.join(pythonRoot, "python.exe")
-    : path.join(pythonRoot, "bin", "python3");
-  const ffmpegRoot = path.join(process.resourcesPath, "vendor", "ffmpeg", "bin");
-  const env = {
-    ...process.env,
-    PORT: String(APP_PORT),
-    NODE_ENV: isPackaged ? "production" : "development",
-    APP_RUNTIME_DIR: appRuntimeDir,
-  };
-
-  if (isPackaged) {
-    env.SPLEETER_PYTHON = pythonExecutable;
-    env.SPLEETER_WRAPPER = wrapperScript;
-    env.FFMPEG_BINARY = path.join(ffmpegRoot, process.platform === "win32" ? "ffmpeg.exe" : "ffmpeg");
-    env.PATH = `${pythonRoot}${path.delimiter}${ffmpegRoot}${path.delimiter}${process.env.PATH || ""}`;
-    env.MODEL_PATH = path.join(process.resourcesPath, "pretrained_models");
-    env.TF_ENABLE_ONEDNN_OPTS = "0";
-    env.TF_CPP_MIN_LOG_LEVEL = "2";
-    env.OMP_NUM_THREADS = "1";
-    env.TF_NUM_INTRAOP_THREADS = "1";
-    env.TF_NUM_INTEROP_THREADS = "1";
-    env.GITHUB_HOST = "https://github.com";
-    env.GITHUB_REPOSITORY = "deezer/spleeter";
-    env.GITHUB_RELEASE = "v1.4.0";
-  }
-
-  if (!isPackaged) {
-    env.SPLEETER_WRAPPER = wrapperScript;
-  }
-
-  Object.assign(process.env, env);
-  serverModulePromise = import(pathToFileURL(serverScript).href).then((module) => {
-    serverModule = module;
-    return module;
-  });
-  return serverModulePromise;
 }
 
 async function createWindow() {
-  const appUrl = getAppUrl();
-  await startServer();
-  await waitForServer("http://127.0.0.1:8000");
+  assertRuntimeReady();
+  startServer();
+  await waitForServer(entryUrl);
+  await assertWindowsHealthRuntime(entryUrl);
 
   mainWindow = new BrowserWindow({
     width: 1440,
     height: 920,
     minWidth: 1180,
     minHeight: 760,
+    backgroundColor: "#0b1020",
     autoHideMenuBar: true,
-    backgroundColor: "#07111d",
-    icon: path.join(app.getAppPath(), "build", "icons", "prismtrack.ico"),
     webPreferences: {
       contextIsolation: true,
       sandbox: true,
@@ -173,28 +341,43 @@ async function createWindow() {
   });
 
   mainWindow.webContents.on("will-navigate", (event, url) => {
-    if (!url.startsWith(`http://127.0.0.1:${APP_PORT}`)) {
+    if (!url.startsWith(entryUrl)) {
       event.preventDefault();
       shell.openExternal(url);
     }
   });
 
-  await mainWindow.loadURL(appUrl);
+  await mainWindow.loadURL(entryUrl);
+
+  if (isDev) {
+    mainWindow.webContents.openDevTools({ mode: "detach" });
+  }
 }
 
-app.whenReady().then(() => {
-  setupLogging();
-  createWindow().catch((error) => {
-    console.error(error);
-    app.quit();
-  });
+function stopServer() {
+  shuttingDown = true;
+  if (serverProcess) {
+    serverProcess.kill();
+    serverProcess = null;
+  }
+}
 
-  app.on("activate", () => {
+app.whenReady().then(async () => {
+  try {
+    await createWindow();
+  } catch (error) {
+    const diagnostics = await collectStartupDiagnostics(entryUrl);
+    const isVcRuntime = hasVcRuntimeError(`${error.message}\n${diagnostics.stderrSnippet || ""}`);
+    const message = isVcRuntime
+      ? buildVcRuntimeErrorMessage(error.message)
+      : buildStartupFailureMessage(error.message, diagnostics);
+    dialog.showErrorBox("PrismTrack 启动失败", message);
+    app.quit();
+  }
+
+  app.on("activate", async () => {
     if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow().catch((error) => {
-        console.error(error);
-        app.quit();
-      });
+      await createWindow();
     }
   });
 });
@@ -206,7 +389,5 @@ app.on("window-all-closed", () => {
 });
 
 app.on("before-quit", () => {
-  if (serverModule?.server?.listening) {
-    serverModule.server.close();
-  }
+  stopServer();
 });
