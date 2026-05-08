@@ -56,7 +56,9 @@ jobs:
             Write-Error "Cannot locate python.exe inside extracted runtime archive."
             exit 1
           }
-          $sourceRoot = Split-Path -Parent $pythonExe.FullName
+          $pythonDir = Split-Path -Parent $pythonExe.FullName
+          $sourceRoot = Split-Path -Parent $pythonDir
+          Write-Host "Detected python dir: $pythonDir"
           Write-Host "Detected runtime root: $sourceRoot"
 
           if (Test-Path "python") {
