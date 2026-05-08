@@ -34,15 +34,18 @@ def fingerprint_audio(data: np.ndarray) -> dict:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="PrismTrack Spleeter wrapper")
-    parser.add_argument("--model", required=True)
-    parser.add_argument("--input", dest="input_path", required=True)
-    parser.add_argument("--output", dest="output_dir", required=True)
+    parser.add_argument("--model")
+    parser.add_argument("--input", dest="input_path")
+    parser.add_argument("--output", dest="output_dir")
     parser.add_argument("--probe", action="store_true")
     args = parser.parse_args()
 
     if args.probe:
         print(json.dumps({"ok": True, "probe": True}, ensure_ascii=False))
         return 0
+
+    if not args.model or not args.input_path or not args.output_dir:
+        parser.error("--model, --input and --output are required unless --probe is used")
 
     from spleeter.audio.adapter import AudioAdapter
     from spleeter.separator import Separator
