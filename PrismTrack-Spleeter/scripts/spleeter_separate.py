@@ -1,12 +1,11 @@
 import argparse
+import hashlib
 import json
 import os
 import sys
 import wave
 
 import numpy as np
-from spleeter.audio.adapter import AudioAdapter
-from spleeter.separator import Separator
 
 
 def save_wav(path: str, data: np.ndarray, sample_rate: int) -> None:
@@ -23,12 +22,30 @@ def save_wav(path: str, data: np.ndarray, sample_rate: int) -> None:
         wav_file.writeframes(pcm.tobytes())
 
 
+def fingerprint_audio(data: np.ndarray) -> dict:
+    audio = np.asarray(data, dtype=np.float32)
+    return {
+        "shape": list(audio.shape),
+        "mean_abs": float(np.mean(np.abs(audio))),
+        "max_abs": float(np.max(np.abs(audio))),
+        "sha256_f32": hashlib.sha256(audio.tobytes()).hexdigest(),
+    }
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="PrismTrack Spleeter wrapper")
     parser.add_argument("--model", required=True)
     parser.add_argument("--input", dest="input_path", required=True)
     parser.add_argument("--output", dest="output_dir", required=True)
+    parser.add_argument("--probe", action="store_true")
     args = parser.parse_args()
+
+    if args.probe:
+        print(json.dumps({"ok": True, "probe": True}, ensure_ascii=False))
+        return 0
+
+    from spleeter.audio.adapter import AudioAdapter
+    from spleeter.separator import Separator
 
     audio_loader = AudioAdapter.default()
     waveform, sample_rate = audio_loader.load(args.input_path, sample_rate=44100)
@@ -40,7 +57,9 @@ def main() -> int:
     os.makedirs(target_dir, exist_ok=True)
 
     written = {}
+    fingerprints = {}
     for stem_name, stem_data in prediction.items():
+        fingerprints[stem_name] = fingerprint_audio(stem_data)
         stem_path = os.path.join(target_dir, f"{stem_name}.wav")
         save_wav(stem_path, stem_data, sample_rate)
         written[stem_name] = stem_path
@@ -53,6 +72,7 @@ def main() -> int:
                 "input": args.input_path,
                 "output": args.output_dir,
                 "written": written,
+                "fingerprints": fingerprints,
             },
             ensure_ascii=False,
         )

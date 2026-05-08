@@ -80,7 +80,7 @@ async function handleHealth(request, response) {
   try {
     let spleeterAvailable = false;
     if (process.env.SPLEETER_PYTHON) {
-      const result = await runCommand(process.env.SPLEETER_PYTHON, [SPLEETER_WRAPPER, "--help"], 5000);
+      const result = await runCommand(process.env.SPLEETER_PYTHON, [SPLEETER_WRAPPER, "--probe"], 5000);
       spleeterAvailable = result.code === 0;
     } else {
       const spleeterRuntime = await resolveSpleeterCommand();
