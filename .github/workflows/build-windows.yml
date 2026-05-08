@@ -39,7 +39,6 @@ jobs:
           $zipUrl = "https://makenweb.com/downloads/SpleeterGUI_2.9.4.0.zip"
           $zipPath = Join-Path $env:RUNNER_TEMP "SpleeterGUI_2.9.4.0.zip"
           $extractRoot = Join-Path $env:RUNNER_TEMP "spleetergui-runtime"
-          $sourceRoot = Join-Path $extractRoot "SpleeterGUI_2.9.4.0/SpleeterGUI"
 
           if (-not (Test-Path $zipPath)) {
             Invoke-WebRequest -Uri $zipUrl -OutFile $zipPath
@@ -51,6 +50,14 @@ jobs:
           New-Item -ItemType Directory -Path $extractRoot | Out-Null
 
           Expand-Archive -Path $zipPath -DestinationPath $extractRoot -Force
+
+          $pythonExe = Get-ChildItem -Path $extractRoot -Filter "python.exe" -Recurse -File | Select-Object -First 1
+          if (-not $pythonExe) {
+            Write-Error "Cannot locate python.exe inside extracted runtime archive."
+            exit 1
+          }
+          $sourceRoot = Split-Path -Parent $pythonExe.FullName
+          Write-Host "Detected runtime root: $sourceRoot"
 
           if (Test-Path "python") {
             Remove-Item "python" -Recurse -Force
