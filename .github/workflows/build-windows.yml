@@ -102,7 +102,7 @@ jobs:
         with:
           name: prismtrack-windows-${{ github.run_number }}
           path: |
-            PrismTrack-Spleeter/dist/**/*.exe
-            PrismTrack-Spleeter/dist/**/*.zip
-            PrismTrack-Spleeter/dist/**/*.yml
+            dist/**/*.exe
+            dist/**/*.zip
+            dist/**/*.yml
           if-no-files-found: error
