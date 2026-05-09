@@ -5,11 +5,11 @@ const path = require("node:path");
 const http = require("node:http");
 
 const isDev = !app.isPackaged;
-const appRoot = isDev ? path.resolve(__dirname, "..") : process.resourcesPath;
+const codeRoot = isDev ? path.resolve(__dirname, "..") : app.getAppPath();
 const entryUrl = process.env.PRISMTRACK_DESKTOP_URL || "http://127.0.0.1:8000/";
 const serverPort = Number(new URL(entryUrl).port || 8000);
-const installRoot = isDev ? appRoot : path.dirname(process.execPath);
-const DESKTOP_RUNTIME_CHECK_REV = "runtime-check-r2-20260509";
+const installRoot = isDev ? codeRoot : path.dirname(process.execPath);
+const DESKTOP_RUNTIME_CHECK_REV = "runtime-check-r3-20260509";
 
 let mainWindow = null;
 let serverProcess = null;
@@ -26,7 +26,7 @@ function uniqPaths(paths) {
 
 function getRuntimeRoots() {
   if (isDev) {
-    return [appRoot];
+    return [codeRoot];
   }
 
   // In packaged Windows app, extraFiles may land in install root,
@@ -34,8 +34,17 @@ function getRuntimeRoots() {
   return uniqPaths([process.resourcesPath, installRoot]);
 }
 
-function resolveRuntimeFile(relativePath) {
-  const roots = getRuntimeRoots();
+function getAppRoots() {
+  if (isDev) {
+    return [codeRoot];
+  }
+
+  // Application files from build.files usually live under app.getAppPath(),
+  // but keep fallback roots for safety across packaging layouts.
+  return uniqPaths([codeRoot, process.resourcesPath, installRoot]);
+}
+
+function resolveFileFromRoots(relativePath, roots) {
   for (const root of roots) {
     const absolutePath = path.join(root, relativePath);
     if (fs.existsSync(absolutePath)) {
@@ -43,11 +52,19 @@ function resolveRuntimeFile(relativePath) {
     }
   }
 
-  return path.join(roots[0] || appRoot, relativePath);
+  return path.join(roots[0] || codeRoot, relativePath);
+}
+
+function resolveRuntimeFile(relativePath) {
+  return resolveFileFromRoots(relativePath, getRuntimeRoots());
+}
+
+function resolveAppFile(relativePath) {
+  return resolveFileFromRoots(relativePath, getAppRoots());
 }
 
 function buildServerEnv() {
-  const wrapperPath = resolveRuntimeFile(path.join("scripts", "spleeter_separate.py"));
+  const wrapperPath = resolveAppFile(path.join("scripts", "spleeter_separate.py"));
 
   return {
     ...process.env,
@@ -62,7 +79,7 @@ function getWindowsRuntimeValidation() {
   const localPythonPath = resolveRuntimeFile(path.join("python", "python.exe"));
   const localFfmpegPath = resolveRuntimeFile("ffmpeg.exe");
   const localFfprobePath = resolveRuntimeFile("ffprobe.exe");
-  const localWrapperPath = resolveRuntimeFile(path.join("scripts", "spleeter_separate.py"));
+  const localWrapperPath = resolveAppFile(path.join("scripts", "spleeter_separate.py"));
 
   const requiredFiles = [
     {
@@ -91,6 +108,7 @@ function getWindowsRuntimeValidation() {
   return {
     ok: missingFiles.length === 0,
     roots: getRuntimeRoots(),
+    appRoots: getAppRoots(),
     missingFiles,
   };
 }
@@ -107,7 +125,8 @@ function buildWindowsRuntimeErrorMessage(validation) {
     "缺失文件:",
     missingList,
     "",
-    `当前检测目录: ${validation.roots.join(" | ")}`,
+    `运行时检测目录: ${validation.roots.join(" | ")}`,
+    `应用文件检测目录: ${validation.appRoots.join(" | ")}`,
     "",
     "请确认安装包内容完整，或在应用目录中补齐以下结构后重试:",
     "python/python.exe",
@@ -212,7 +231,7 @@ function startServer() {
 
   const serverScript = path.join(appRoot, "server.js");
   serverProcess = spawn(resolveNodeCommand(), [serverScript], {
-    cwd: appRoot,
+    cwd: codeRoot,
     env: buildServerEnv(),
     stdio: ["ignore", "pipe", "pipe"],
     windowsHide: true,
