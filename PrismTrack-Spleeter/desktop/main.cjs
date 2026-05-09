@@ -9,6 +9,7 @@ const appRoot = isDev ? path.resolve(__dirname, "..") : process.resourcesPath;
 const entryUrl = process.env.PRISMTRACK_DESKTOP_URL || "http://127.0.0.1:8000/";
 const serverPort = Number(new URL(entryUrl).port || 8000);
 const installRoot = isDev ? appRoot : path.dirname(process.execPath);
+const DESKTOP_RUNTIME_CHECK_REV = "runtime-check-r2-20260509";
 
 let mainWindow = null;
 let serverProcess = null;
@@ -101,6 +102,7 @@ function buildWindowsRuntimeErrorMessage(validation) {
 
   return [
     "未检测到完整的 PrismTrack Windows 本地运行时，应用无法启动。",
+    `构建校验标识: ${DESKTOP_RUNTIME_CHECK_REV}`,
     "",
     "缺失文件:",
     missingList,

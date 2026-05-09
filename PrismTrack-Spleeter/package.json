@@ -72,7 +72,7 @@
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
-      "artifactName": "PrismTrack-Setup-${version}.${ext}"
+      "artifactName": "PrismTrack-Setup-${version}-${env.GH_RUN_NUMBER}-${env.GH_SHORT_SHA}.${ext}"
     }
   }
 }

@@ -95,6 +95,9 @@ jobs:
         run: npm install
 
       - name: Build Windows installer
+        env:
+          GH_RUN_NUMBER: ${{ github.run_number }}
+          GH_SHORT_SHA: ${{ github.sha }}
         run: npm run dist:win
 
       - name: Upload Windows artifacts
