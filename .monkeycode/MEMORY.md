@@ -109,3 +109,13 @@ Agent 在任务执行过程中发现的条目应遵循以下格式：
   - Windows 打包 workflow 位于仓库根目录 .github/workflows/build-windows.yml，工作目录固定为 PrismTrack-Spleeter
   - CI 在执行 npm run dist:win 前需校验 python/python.exe、ffmpeg.exe、ffprobe.exe、ffplay.exe、scripts/spleeter_separate.py 是否存在
   - CI 打包产物统一从 PrismTrack-Spleeter/dist 上传，至少包含 .exe 安装包
+
+[PrismTrack Windows 桌面启动日志约定]
+- Date: 2026-05-09
+- Context: Agent 在处理 Windows 安装包启动超时时发现
+- Category: 代码模式
+- Instructions:
+  - Windows 桌面主进程启动日志写入 Electron userData 下的 logs/desktop.log
+  - Windows 预期日志路径为 %APPDATA%/PrismTrack/logs/desktop.log，启动失败弹窗应提示该路径
+  - packaged Electron 使用 process.execPath 启动 server.js 时需要设置 ELECTRON_RUN_AS_NODE=1
+  - 每次修改桌面启动链路时应更新 DESKTOP_RUNTIME_CHECK_REV，便于区分用户运行的安装包版本

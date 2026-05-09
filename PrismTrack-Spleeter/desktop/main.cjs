@@ -9,15 +9,81 @@ const codeRoot = isDev ? path.resolve(__dirname, "..") : app.getAppPath();
 const entryUrl = process.env.PRISMTRACK_DESKTOP_URL || "http://127.0.0.1:8000/";
 const serverPort = Number(new URL(entryUrl).port || 8000);
 const installRoot = isDev ? codeRoot : path.dirname(process.execPath);
-const DESKTOP_RUNTIME_CHECK_REV = "runtime-check-r4-20260509";
+const DESKTOP_RUNTIME_CHECK_REV = "runtime-check-r5-20260509";
 
 let mainWindow = null;
 let serverProcess = null;
 let shuttingDown = false;
 let serverStderrBuffer = "";
+let logFilePath = "";
 
 function resolveNodeCommand() {
   return process.execPath;
+}
+
+function formatLogArg(value) {
+  if (value instanceof Error) {
+    return value.stack || value.message;
+  }
+  if (typeof value === "string") {
+    return value;
+  }
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
+}
+
+function appendLog(level, ...args) {
+  if (!logFilePath) {
+    return;
+  }
+
+  try {
+    const line = `${new Date().toISOString()} [${level}] ${args.map(formatLogArg).join(" ")}\n`;
+    fs.appendFileSync(logFilePath, line, "utf8");
+  } catch {}
+}
+
+function logInfo(...args) {
+  appendLog("INFO", ...args);
+}
+
+function logError(...args) {
+  appendLog("ERROR", ...args);
+}
+
+function setupLogging() {
+  const logDir = path.join(app.getPath("userData"), "logs");
+  fs.mkdirSync(logDir, { recursive: true });
+  logFilePath = path.join(logDir, "desktop.log");
+
+  logInfo("--- PrismTrack desktop start ---");
+  logInfo("runtime check revision", DESKTOP_RUNTIME_CHECK_REV);
+  logInfo("isPackaged", app.isPackaged);
+  logInfo("process.execPath", process.execPath);
+  logInfo("process.resourcesPath", process.resourcesPath);
+  logInfo("app.getAppPath", app.getAppPath());
+  logInfo("logFilePath", logFilePath);
+  logInfo("codeRoot", codeRoot);
+  logInfo("installRoot", installRoot);
+  logInfo("entryUrl", entryUrl);
+  logInfo("serverPort", serverPort);
+}
+
+function installProcessLogHandlers() {
+  process.on("uncaughtException", (error) => {
+    logError("uncaught exception", error);
+  });
+
+  process.on("unhandledRejection", (reason) => {
+    logError("unhandled rejection", reason);
+  });
+}
+
+function getLogPathMessage() {
+  return logFilePath ? `启动日志: ${logFilePath}` : "启动日志尚未初始化";
 }
 
 function uniqPaths(paths) {
@@ -68,6 +134,7 @@ function buildServerEnv() {
 
   return {
     ...process.env,
+    ELECTRON_RUN_AS_NODE: "1",
     PORT: String(serverPort),
     APP_RUNTIME_DIR: path.join(app.getPath("userData"), ".runtime"),
     SPLEETER_MODEL_PATH: path.join(app.getPath("userData"), "pretrained_models"),
@@ -109,6 +176,7 @@ function getWindowsRuntimeValidation() {
     ok: missingFiles.length === 0,
     roots: getRuntimeRoots(),
     appRoots: getAppRoots(),
+    requiredFiles,
     missingFiles,
   };
 }
@@ -134,6 +202,8 @@ function buildWindowsRuntimeErrorMessage(validation) {
     "ffprobe.exe",
     "scripts/spleeter_separate.py",
     "",
+    getLogPathMessage(),
+    "",
     "如果这是自行打包的版本，请先确认 electron-builder 已正确包含 extraFiles。",
   ].join("\n");
 }
@@ -155,6 +225,8 @@ function buildVcRuntimeErrorMessage(details = "") {
     "常见缺失文件包括：VCRUNTIME140.dll、VCRUNTIME140_1.dll、MSVCP140.dll",
     details ? "" : null,
     details ? `诊断信息: ${details}` : null,
+    "",
+    getLogPathMessage(),
   ]
     .filter(Boolean)
     .join("\n");
@@ -174,7 +246,7 @@ function formatStderrSnippet(maxLength = 1600) {
 }
 
 function buildStartupFailureMessage(baseMessage, diagnostics = {}) {
-  const lines = [baseMessage];
+  const lines = [baseMessage, `构建校验标识: ${DESKTOP_RUNTIME_CHECK_REV}`];
   const healthStatus = diagnostics.healthStatusCode;
   const healthMessage = diagnostics.healthMessage;
   const runtimeSummary = diagnostics.runtimeSummary;
@@ -200,6 +272,9 @@ function buildStartupFailureMessage(baseMessage, diagnostics = {}) {
     lines.push(stderrSnippet);
   }
 
+  lines.push("");
+  lines.push(getLogPathMessage());
+
   return lines.join("\n");
 }
 
@@ -209,7 +284,25 @@ function assertRuntimeReady() {
   }
 
   const validation = getWindowsRuntimeValidation();
+  logInfo("runtime validation", {
+    ok: validation.ok,
+    runtimeRoots: validation.roots,
+    appRoots: validation.appRoots,
+    requiredFiles: validation.requiredFiles.map((item) => ({
+      label: item.label,
+      relativePath: item.relativePath,
+      absolutePath: item.absolutePath,
+      exists: fs.existsSync(item.absolutePath),
+    })),
+    missingFiles: validation.missingFiles.map((item) => ({
+      label: item.label,
+      relativePath: item.relativePath,
+      absolutePath: item.absolutePath,
+    })),
+  });
+
   if (!validation.ok) {
+    logError("runtime validation failed", validation.missingFiles);
     throw new Error(buildWindowsRuntimeErrorMessage(validation));
   }
 }
@@ -230,14 +323,27 @@ function startServer() {
   serverStderrBuffer = "";
 
   const serverScript = path.join(codeRoot, "server.js");
+  const serverEnv = buildServerEnv();
+  logInfo("starting local server", {
+    command: resolveNodeCommand(),
+    args: [serverScript],
+    cwd: codeRoot,
+    electronRunAsNode: serverEnv.ELECTRON_RUN_AS_NODE,
+    port: serverEnv.PORT,
+    wrapper: serverEnv.SPLEETER_WRAPPER,
+    modelPath: serverEnv.SPLEETER_MODEL_PATH,
+    appRuntimeDir: serverEnv.APP_RUNTIME_DIR,
+  });
+
   serverProcess = spawn(resolveNodeCommand(), [serverScript], {
     cwd: codeRoot,
-    env: buildServerEnv(),
+    env: serverEnv,
     stdio: ["ignore", "pipe", "pipe"],
     windowsHide: true,
   });
 
   serverProcess.stdout?.on("data", (chunk) => {
+    logInfo("[desktop-server stdout]", chunk.toString().trimEnd());
     process.stdout.write(`[desktop-server] ${chunk}`);
   });
 
@@ -246,10 +352,20 @@ function startServer() {
     if (serverStderrBuffer.length > 24000) {
       serverStderrBuffer = serverStderrBuffer.slice(-24000);
     }
+    logError("[desktop-server stderr]", chunk.toString().trimEnd());
     process.stderr.write(`[desktop-server] ${chunk}`);
   });
 
-  serverProcess.on("exit", (code) => {
+  serverProcess.on("error", (error) => {
+    logError("local server process spawn error", error);
+    dialog.showErrorBox("PrismTrack 启动失败", buildStartupFailureMessage("本地服务进程启动失败", {
+      stderrSnippet: error.message,
+    }));
+    app.quit();
+  });
+
+  serverProcess.on("exit", (code, signal) => {
+    logInfo("local server process exit", { code, signal, shuttingDown });
     const crashedUnexpectedly = !shuttingDown && code !== 0;
     serverProcess = null;
     if (crashedUnexpectedly) {
@@ -258,6 +374,7 @@ function startServer() {
         : buildStartupFailureMessage(`本地服务进程异常退出，退出码: ${code}`, {
             stderrSnippet: formatStderrSnippet(),
           });
+      logError("local server process crashed", message);
       dialog.showErrorBox("PrismTrack 启动失败", message);
       app.quit();
     }
@@ -327,8 +444,9 @@ async function collectStartupDiagnostics(url) {
     diagnostics.healthStatusCode = statusCode || null;
     diagnostics.healthMessage = payload?.message || "";
     diagnostics.runtimeSummary = summarizeRuntime(payload);
-  } catch {
-    // Ignore health probe errors and rely on stderr diagnostics.
+    logInfo("startup diagnostics health payload", { statusCode, payload });
+  } catch (error) {
+    logError("startup diagnostics health request failed", error);
   }
 
   return diagnostics;
@@ -336,28 +454,60 @@ async function collectStartupDiagnostics(url) {
 
 function waitForServer(url, timeoutMs = 30000) {
   const startedAt = Date.now();
+  let attempts = 0;
+  let lastFailure = "";
 
   return new Promise((resolve, reject) => {
     const attempt = () => {
+      let completed = false;
+
+      const failOnce = (reason) => {
+        if (completed) {
+          return;
+        }
+        completed = true;
+        retryOrFail(reason);
+      };
+
       const request = http.get(`${url}api/health`, (response) => {
-        response.resume();
         if (response.statusCode === 200) {
+          completed = true;
+          response.resume();
+          logInfo("local server health check succeeded", { attempts, statusCode: response.statusCode });
           resolve();
           return;
         }
-        retryOrFail();
+        let body = "";
+        response.setEncoding("utf8");
+        response.on("data", (chunk) => {
+          body += chunk;
+        });
+        response.on("end", () => {
+          const snippet = body.trim().slice(0, 1000);
+          failOnce(snippet ? `HTTP ${response.statusCode}: ${snippet}` : `HTTP ${response.statusCode}`);
+        });
       });
 
-      request.on("error", retryOrFail);
+      request.on("error", (error) => failOnce(error.message));
       request.setTimeout(2000, () => {
-        request.destroy();
-        retryOrFail();
+        request.destroy(new Error("health 请求超时"));
       });
     };
 
-    const retryOrFail = () => {
+    const retryOrFail = (reason = "") => {
+      attempts += 1;
+      if (reason) {
+        lastFailure = reason;
+      }
+
+      if (attempts === 1 || attempts % 10 === 0) {
+        logInfo("waiting for local server", { attempts, elapsedMs: Date.now() - startedAt, lastFailure });
+      }
+
       if (Date.now() - startedAt >= timeoutMs) {
-        reject(new Error("等待本地服务启动超时"));
+        const message = lastFailure ? `等待本地服务启动超时，最后错误: ${lastFailure}` : "等待本地服务启动超时";
+        logError("local server startup timed out", { attempts, lastFailure, stderr: formatStderrSnippet() });
+        reject(new Error(message));
         return;
       }
       setTimeout(attempt, 500);
@@ -408,6 +558,7 @@ async function createWindow() {
 function stopServer() {
   shuttingDown = true;
   if (serverProcess) {
+    logInfo("stopping local server process");
     serverProcess.kill();
     serverProcess = null;
   }
@@ -415,13 +566,17 @@ function stopServer() {
 
 app.whenReady().then(async () => {
   try {
+    setupLogging();
+    installProcessLogHandlers();
     await createWindow();
   } catch (error) {
+    logError("desktop startup failed", error);
     const diagnostics = await collectStartupDiagnostics(entryUrl);
     const isVcRuntime = hasVcRuntimeError(`${error.message}\n${diagnostics.stderrSnippet || ""}`);
     const message = isVcRuntime
       ? buildVcRuntimeErrorMessage(error.message)
       : buildStartupFailureMessage(error.message, diagnostics);
+    logError("showing startup failure dialog", message);
     dialog.showErrorBox("PrismTrack 启动失败", message);
     app.quit();
   }
