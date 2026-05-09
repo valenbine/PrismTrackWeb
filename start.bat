@@ -71,7 +71,7 @@ echo [INFO] 按 Ctrl+C 停止服务
 echo.
 
 :: 启动启动器
-node launcher.js
+node launcher.cjs
 
 :: 如果启动器退出，暂停以便查看错误
 if %errorlevel% neq 0 (
