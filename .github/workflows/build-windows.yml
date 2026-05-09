@@ -48,14 +48,11 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: 'package-lock.json'
 
       - name: Prepare Windows runtime baseline
         run: |
           $ErrorActionPreference = 'Stop'
 
-          # 下载 SpleeterGUI 运行时
           $zipUrl = 'https://makenweb.com/downloads/SpleeterGUI_2.9.4.0.zip'
           $zipPath = Join-Path $env:RUNNER_TEMP 'SpleeterGUI_2.9.4.0.zip'
           $extractRoot = Join-Path $env:RUNNER_TEMP 'spleetergui-runtime'
@@ -73,7 +70,6 @@ jobs:
           Write-Host 'Extracting runtime...'
           Expand-Archive -Path $zipPath -DestinationPath $extractRoot -Force
 
-          # 查找 python.exe
           $pythonExe = Get-ChildItem -Path $extractRoot -Filter 'python.exe' -Recurse -File | Select-Object -First 1
           if (-not $pythonExe) {
             Write-Error 'Cannot locate python.exe inside extracted runtime archive.'
@@ -84,7 +80,6 @@ jobs:
           Write-Host "Detected python dir: $pythonDir"
           Write-Host "Detected runtime root: $sourceRoot"
 
-          # 复制运行时文件到项目目录
           if (Test-Path 'python') {
             Remove-Item 'python' -Recurse -Force
           }
@@ -98,11 +93,11 @@ jobs:
       - name: Verify required runtime files
         run: |
           $required = @(
-            'python/python.exe',
+            'python\python.exe',
             'ffmpeg.exe',
             'ffprobe.exe',
             'ffplay.exe',
-            'scripts/spleeter_separate.py'
+            'scripts\spleeter_separate.py'
           )
 
           $missing = @()
@@ -123,35 +118,28 @@ jobs:
         run: npm install --omit=dev
 
       - name: Create NSIS installer script
+        shell: pwsh
         run: |
-          $nsisScript = @'
+          $nsisScript = @"
           !include "MUI2.nsh"
           !include "FileFunc.nsh"
 
-          ; 应用信息
           !define APP_NAME "PrismTrackWeb"
-          !define APP_VERSION "${APP_VERSION}"
+          !define APP_VERSION "$env:APP_VERSION"
           !define APP_PUBLISHER "valenbine"
           !define APP_URL "https://github.com/valenbine/PrismTrackWeb"
 
-          ; 安装包输出
-          OutFile "PrismTrackWeb-Setup-${APP_VERSION}.exe"
-          InstallDir "$PROGRAMFILES64\PrismTrackWeb"
-          InstallDirRegKey HKLM "Software\${APP_NAME}" "InstallDir"
+          OutFile "PrismTrackWeb-Setup-$env:APP_VERSION.exe"
+          InstallDir "`$PROGRAMFILES64\PrismTrackWeb"
+          InstallDirRegKey HKLM "Software\PrismTrackWeb" "InstallDir"
 
-          ; 界面设置
           !define MUI_ABORTWARNING
-          !define MUI_ICON "${NSIS_ICON}"
-          !define MUI_UNICON "${NSIS_ICON}"
 
-          ; 页面
           !insertmacro MUI_PAGE_WELCOME
-          !insertmacro MUI_PAGE_LICENSE "${LICENSE_FILE}"
           !insertmacro MUI_PAGE_DIRECTORY
           !insertmacro MUI_PAGE_INSTFILES
           !insertmacro MUI_PAGE_FINISH
 
-          !insertmacro MUI_UNPAGE_WELCOME
           !insertmacro MUI_UNPAGE_CONFIRM
           !insertmacro MUI_UNPAGE_INSTFILES
           !insertmacro MUI_UNPAGE_FINISH
@@ -159,139 +147,108 @@ jobs:
           !insertmacro MUI_LANGUAGE "English"
           !insertmacro MUI_LANGUAGE "SimpChinese"
 
-          ; 安装包信息
-          Name "${APP_NAME} ${APP_VERSION}"
-          BrandingText "${APP_NAME} - Web Middleware for Music Separation"
+          Name "PrismTrackWeb $env:APP_VERSION"
+          BrandingText "PrismTrackWeb - Web Middleware for Music Separation"
 
           Section "PrismTrackWeb" SecMain
-            SetOutPath "$INSTDIR"
+            SetOutPath "`$INSTDIR"
 
-            ; 写入安装信息到注册表
-            WriteRegStr HKLM "Software\${APP_NAME}" "InstallDir" "$INSTDIR"
-            WriteRegStr HKLM "Software\${APP_NAME}" "Version" "${APP_VERSION}"
-            WriteRegStr HKLM "Software\${APP_NAME}" "Publisher" "${APP_PUBLISHER}"
-            WriteRegStr HKLM "Software\${APP_NAME}" "URL" "${APP_URL}"
-            WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APP_NAME}" "DisplayName" "${APP_NAME}"
-            WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APP_NAME}" "UninstallString" '"$INSTDIR\uninstall.exe"'
-            WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APP_NAME}" "QuietUninstallString" '"$INSTDIR\uninstall.exe" /S'
-            WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APP_NAME}" "DisplayVersion" "${APP_VERSION}"
-            WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APP_NAME}" "Publisher" "${APP_PUBLISHER}"
-            WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APP_NAME}" "HelpLink" "${APP_URL}"
-            WriteRegDWORD HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APP_NAME}" "NoModify" 1
-            WriteRegDWORD HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APP_NAME}" "NoRepair" 1
+            WriteRegStr HKLM "Software\PrismTrackWeb" "InstallDir" "`$INSTDIR"
+            WriteRegStr HKLM "Software\PrismTrackWeb" "Version" "$env:APP_VERSION"
+            WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\PrismTrackWeb" "DisplayName" "PrismTrackWeb"
+            WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\PrismTrackWeb" "UninstallString" '"`$INSTDIR\uninstall.exe"'
+            WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\PrismTrackWeb" "DisplayVersion" "$env:APP_VERSION"
+            WriteRegDWORD HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\PrismTrackWeb" "NoModify" 1
+            WriteRegDWORD HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\PrismTrackWeb" "NoRepair" 1
 
-            ; 安装文件
             File /r "node_modules\"
             File "server.js"
             File "launcher.js"
             File "package.json"
-            File "package-lock.json"
             File "index.html"
             File "styles.css"
             File "favicon.svg"
-            File "requirements.txt"
+            File "start.bat"
             File "ffmpeg.exe"
             File "ffprobe.exe"
             File "ffplay.exe"
-            File "start.bat"
 
-            ; 安装脚本和 Python 文件
             File /r "scripts\"
             File /r "src\"
             File /r "python\"
 
-            ; 创建运行时目录
-            CreateDirectory "$APPDATA\PrismTrackWeb\.runtime"
-            CreateDirectory "$APPDATA\PrismTrackWeb\pretrained_models"
-            CreateDirectory "$APPDATA\PrismTrackWeb\logs"
+            CreateDirectory "`$APPDATA\PrismTrackWeb\.runtime"
+            CreateDirectory "`$APPDATA\PrismTrackWeb\pretrained_models"
 
-            ; 创建开始菜单快捷方式
-            CreateDirectory "$SMPROGRAMS\PrismTrackWeb"
-            CreateShortCut "$SMPROGRAMS\PrismTrackWeb\PrismTrackWeb.lnk" "$INSTDIR\start.bat" "" "$INSTDIR\favicon.svg" 0
-            CreateShortCut "$SMPROGRAMS\PrismTrackWeb\卸载 PrismTrackWeb.lnk" "$INSTDIR\uninstall.exe"
+            CreateDirectory "`$SMPROGRAMS\PrismTrackWeb"
+            CreateShortCut "`$SMPROGRAMS\PrismTrackWeb\PrismTrackWeb.lnk" "`$INSTDIR\start.bat" "" "`$INSTDIR\favicon.svg" 0
+            CreateShortCut "`$SMPROGRAMS\PrismTrackWeb\Uninstall.lnk" "`$INSTDIR\uninstall.exe"
 
-            ; 创建桌面快捷方式
-            CreateShortCut "$DESKTOP\PrismTrackWeb.lnk" "$INSTDIR\start.bat" "" "$INSTDIR\favicon.svg" 0
+            CreateShortCut "`$DESKTOP\PrismTrackWeb.lnk" "`$INSTDIR\start.bat" "" "`$INSTDIR\favicon.svg" 0
 
-            ; 生成卸载程序
-            WriteUninstaller "$INSTDIR\uninstall.exe"
-
-            ${GetSize} "$INSTDIR" "/S=0K" $0 $1 $2
-            IntFmt $0 "0x%08X" $0
-            WriteRegDWORD HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APP_NAME}" "EstimatedSize" "$0"
-          SectionEnd
-
-          Section "创建 Web 服务开机自启 (可选)" SecAutoStart
-            SetOutPath "$INSTDIR"
-            CreateShortCut "$SMSTARTUP\PrismTrackWeb.lnk" "$INSTDIR\start.bat" "" "$INSTDIR\favicon.svg" 0
+            WriteUninstaller "`$INSTDIR\uninstall.exe"
           SectionEnd
 
           Section "Uninstall"
-            ; 删除注册表项
-            DeleteRegKey HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APP_NAME}"
-            DeleteRegKey HKLM "Software\${APP_NAME}"
+            DeleteRegKey HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\PrismTrackWeb"
+            DeleteRegKey HKLM "Software\PrismTrackWeb"
 
-            ; 删除快捷方式
-            Delete "$SMPROGRAMS\PrismTrackWeb\PrismTrackWeb.lnk"
-            Delete "$SMPROGRAMS\PrismTrackWeb\卸载 PrismTrackWeb.lnk"
-            Delete "$DESKTOP\PrismTrackWeb.lnk"
-            Delete "$SMSTARTUP\PrismTrackWeb.lnk"
-            RMDir "$SMPROGRAMS\PrismTrackWeb"
+            Delete "`$SMPROGRAMS\PrismTrackWeb\PrismTrackWeb.lnk"
+            Delete "`$SMPROGRAMS\PrismTrackWeb\Uninstall.lnk"
+            Delete "`$DESKTOP\PrismTrackWeb.lnk"
+            RMDir "`$SMPROGRAMS\PrismTrackWeb"
 
-            ; 删除安装文件
-            RMDir /r "$INSTDIR\node_modules"
-            RMDir /r "$INSTDIR\scripts"
-            RMDir /r "$INSTDIR\src"
-            RMDir /r "$INSTDIR\python"
-            Delete "$INSTDIR\server.js"
-            Delete "$INSTDIR\launcher.js"
-            Delete "$INSTDIR\package.json"
-            Delete "$INSTDIR\package-lock.json"
-            Delete "$INSTDIR\index.html"
-            Delete "$INSTDIR\styles.css"
-            Delete "$INSTDIR\favicon.svg"
-            Delete "$INSTDIR\requirements.txt"
-            Delete "$INSTDIR\ffmpeg.exe"
-            Delete "$INSTDIR\ffprobe.exe"
-            Delete "$INSTDIR\ffplay.exe"
-            Delete "$INSTDIR\start.bat"
-            Delete "$INSTDIR\uninstall.exe"
+            RMDir /r "`$INSTDIR\node_modules"
+            RMDir /r "`$INSTDIR\scripts"
+            RMDir /r "`$INSTDIR\src"
+            RMDir /r "`$INSTDIR\python"
+            Delete "`$INSTDIR\server.js"
+            Delete "`$INSTDIR\launcher.js"
+            Delete "`$INSTDIR\package.json"
+            Delete "`$INSTDIR\index.html"
+            Delete "`$INSTDIR\styles.css"
+            Delete "`$INSTDIR\favicon.svg"
+            Delete "`$INSTDIR\start.bat"
+            Delete "`$INSTDIR\ffmpeg.exe"
+            Delete "`$INSTDIR\ffprobe.exe"
+            Delete "`$INSTDIR\ffplay.exe"
+            Delete "`$INSTDIR\uninstall.exe"
 
-            ; 删除安装目录
-            RMDir "$INSTDIR"
+            RMDir "`$INSTDIR"
 
-            ; 可选：删除用户数据
-            MessageBox MB_YESNO|MB_ICONQUESTION "是否删除用户数据 (模型、分轨结果)？$\n$\n注意：这将删除 $APPDATA\PrismTrackWeb 下的所有数据。" IDNO SkipUserData
-            RMDir /r "$APPDATA\PrismTrackWeb"
+            MessageBox MB_YESNO|MB_ICONQUESTION "Delete user data (models, separated stems)?" IDNO SkipUserData
+            RMDir /r "`$APPDATA\PrismTrackWeb"
             SkipUserData:
           SectionEnd
-          '@
+          "@
 
-          # 替换变量
-          $nsisScript = $nsisScript -replace '\$\{APP_VERSION\}', $env:APP_VERSION
-          $nsisScript = $nsisScript -replace '\$\{NSIS_ICON\}', 'favicon.svg'
-          $nsisScript = $nsisScript -replace '\$\{LICENSE_FILE\}', 'requirements.txt'
-
-          # 写入脚本文件
           Set-Content -Path 'installer.nsi' -Value $nsisScript -Encoding UTF8
           Write-Host 'NSIS installer script created.'
 
-      - name: Setup NSIS
+      - name: Install NSIS
         run: |
-          # 安装 NSIS
-          $installerUrl = 'https://github.com/nicknisi/NSIS/releases/download/v3.08/nsis-3.08-setup.exe'
-          $installerPath = Join-Path $env:RUNNER_TEMP 'nsis-setup.exe'
+          $ErrorActionPreference = 'Stop'
+          $nsisUrl = 'https://github.com/nicknisi/NSIS/releases/download/v3.08/nsis-3.08-setup.exe'
+          $nsisPath = Join-Path $env:RUNNER_TEMP 'nsis-setup.exe'
 
-          Invoke-WebRequest -Uri $installerUrl -OutFile $installerPath -UseBasicParsing
-          Start-Process -FilePath $installerPath -ArgumentList '/S', '/D=C:\Program Files (x86)\NSIS' -Wait -NoNewWindow
+          Invoke-WebRequest -Uri $nsisUrl -OutFile $nsisPath -UseBasicParsing
+          Start-Process -FilePath $nsisPath -ArgumentList '/S', '/D=C:\Program Files (x86)\NSIS' -Wait -NoNewWindow
 
-          # 添加到 PATH
-          echo "C:\Program Files (x86)\NSIS" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-          Write-Host 'NSIS installed.'
+          $makensis = 'C:\Program Files (x86)\NSIS\makensis.exe'
+          if (-not (Test-Path $makensis)) {
+            Write-Error 'NSIS installation failed: makensis.exe not found'
+            exit 1
+          }
+          Write-Host 'NSIS installed successfully.'
 
       - name: Build installer
         run: |
-          & 'C:\Program Files (x86)\NSIS\makensis.exe' /DAPP_VERSION=$env:APP_VERSION installer.nsi
+          $makensis = 'C:\Program Files (x86)\NSIS\makensis.exe'
+          & $makensis installer.nsi
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error 'NSIS build failed'
+            exit 1
+          }
           Write-Host 'Installer built successfully.'
 
       - name: Upload installer artifact
@@ -312,21 +269,20 @@ jobs:
 
             ${{ github.event.inputs.release_notes || '自动构建的 Windows 安装包。' }}
 
-            ## 安装说明
+            ### 安装说明
             1. 下载 `PrismTrackWeb-Setup-${{ env.APP_VERSION }}.exe`
             2. 双击运行安装包
             3. 选择安装路径（默认: `C:\Program Files\PrismTrackWeb`）
-            4. 完成安装后，桌面会生成快捷方式
+            4. 完成后桌面会生成快捷方式
             5. 双击 `PrismTrackWeb` 图标启动服务
 
-            ## 功能特性
+            ### 功能特性
             - 一键启动 Web 服务 (端口 8010)
             - 自动打开系统默认浏览器
             - 支持音乐分轨 (2stems/4stems/5stems)
             - 内置 Python + Spleeter + FFmpeg 运行时
-            - 支持开机自启 (安装时可选)
 
-            ## 系统要求
+            ### 系统要求
             - Windows 10/11 (x64)
             - 至少 2GB 可用磁盘空间
             - 建议 4GB+ 内存
