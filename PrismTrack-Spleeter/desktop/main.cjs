@@ -8,11 +8,7 @@ const isDev = !app.isPackaged;
 const appRoot = isDev ? path.resolve(__dirname, "..") : process.resourcesPath;
 const entryUrl = process.env.PRISMTRACK_DESKTOP_URL || "http://127.0.0.1:8000/";
 const serverPort = Number(new URL(entryUrl).port || 8000);
-const localRuntimeRoot = appRoot;
-const localPythonPath = path.join(localRuntimeRoot, "python", "python.exe");
-const localFfmpegPath = path.join(localRuntimeRoot, "ffmpeg.exe");
-const localFfprobePath = path.join(localRuntimeRoot, "ffprobe.exe");
-const localWrapperPath = path.join(localRuntimeRoot, "scripts", "spleeter_separate.py");
+const installRoot = isDev ? appRoot : path.dirname(process.execPath);
 
 let mainWindow = null;
 let serverProcess = null;
@@ -23,17 +19,50 @@ function resolveNodeCommand() {
   return process.execPath;
 }
 
+function uniqPaths(paths) {
+  return [...new Set(paths.filter(Boolean))];
+}
+
+function getRuntimeRoots() {
+  if (isDev) {
+    return [appRoot];
+  }
+
+  // In packaged Windows app, extraFiles may land in install root,
+  // while app code is usually under resources.
+  return uniqPaths([process.resourcesPath, installRoot]);
+}
+
+function resolveRuntimeFile(relativePath) {
+  const roots = getRuntimeRoots();
+  for (const root of roots) {
+    const absolutePath = path.join(root, relativePath);
+    if (fs.existsSync(absolutePath)) {
+      return absolutePath;
+    }
+  }
+
+  return path.join(roots[0] || appRoot, relativePath);
+}
+
 function buildServerEnv() {
+  const wrapperPath = resolveRuntimeFile(path.join("scripts", "spleeter_separate.py"));
+
   return {
     ...process.env,
     PORT: String(serverPort),
     APP_RUNTIME_DIR: path.join(app.getPath("userData"), ".runtime"),
     SPLEETER_MODEL_PATH: path.join(app.getPath("userData"), "pretrained_models"),
-    SPLEETER_WRAPPER: localWrapperPath,
+    SPLEETER_WRAPPER: wrapperPath,
   };
 }
 
 function getWindowsRuntimeValidation() {
+  const localPythonPath = resolveRuntimeFile(path.join("python", "python.exe"));
+  const localFfmpegPath = resolveRuntimeFile("ffmpeg.exe");
+  const localFfprobePath = resolveRuntimeFile("ffprobe.exe");
+  const localWrapperPath = resolveRuntimeFile(path.join("scripts", "spleeter_separate.py"));
+
   const requiredFiles = [
     {
       label: "Python 运行时",
@@ -60,6 +89,7 @@ function getWindowsRuntimeValidation() {
   const missingFiles = requiredFiles.filter((item) => !fs.existsSync(item.absolutePath));
   return {
     ok: missingFiles.length === 0,
+    roots: getRuntimeRoots(),
     missingFiles,
   };
 }
@@ -75,7 +105,7 @@ function buildWindowsRuntimeErrorMessage(validation) {
     "缺失文件:",
     missingList,
     "",
-    `当前检测目录: ${localRuntimeRoot}`,
+    `当前检测目录: ${validation.roots.join(" | ")}`,
     "",
     "请确认安装包内容完整，或在应用目录中补齐以下结构后重试:",
     "python/python.exe",
