@@ -228,22 +228,66 @@ jobs:
       - name: Install NSIS
         run: |
           $ErrorActionPreference = 'Stop'
-          $nsisUrl = 'https://github.com/nicknisi/NSIS/releases/download/v3.08/nsis-3.08-setup.exe'
+
+          # Try multiple download sources
+          $urls = @(
+            'https://sourceforge.net/projects/nsis/files/NSIS%203/3.08/nsis-3.08-setup.exe/download',
+            'https://nchc.dl.sourceforge.net/project/nsis/NSIS%203/3.08/nsis-3.08-setup.exe'
+          )
+
           $nsisPath = Join-Path $env:RUNNER_TEMP 'nsis-setup.exe'
+          $installed = $false
 
-          Invoke-WebRequest -Uri $nsisUrl -OutFile $nsisPath -UseBasicParsing
-          Start-Process -FilePath $nsisPath -ArgumentList '/S', '/D=C:\Program Files (x86)\NSIS' -Wait -NoNewWindow
+          foreach ($url in $urls) {
+            try {
+              Write-Host "Trying: $url"
+              Invoke-WebRequest -Uri $url -OutFile $nsisPath -UseBasicParsing -TimeoutSec 60
+              if (Test-Path $nsisPath) {
+                $fileSize = (Get-Item $nsisPath).Length
+                if ($fileSize -gt 1MB) {
+                  Write-Host "Downloaded $fileSize bytes"
+                  Start-Process -FilePath $nsisPath -ArgumentList '/S', '/D=C:\Program Files (x86)\NSIS' -Wait -NoNewWindow
+                  $installed = $true
+                  break
+                }
+              }
+            } catch {
+              Write-Host "Failed: $_"
+              continue
+            }
+          }
 
-          $makensis = 'C:\Program Files (x86)\NSIS\makensis.exe'
-          if (-not (Test-Path $makensis)) {
+          if (-not $installed) {
+            # Fallback: try choco
+            choco install nsis -y --no-progress
+          }
+
+          # Find makensis.exe
+          $makensis = Get-ChildItem -Path 'C:\Program Files (x86)\NSIS', 'C:\Program Files\NSIS' -Filter 'makensis.exe' -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $makensis) {
             Write-Error 'NSIS installation failed: makensis.exe not found'
             exit 1
           }
-          Write-Host 'NSIS installed successfully.'
+          Write-Host "NSIS installed at: $($makensis.FullName)"
+
+          # Add to PATH
+          $nsisDir = Split-Path $makensis.FullName
+          echo "$nsisDir" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
       - name: Build installer
         run: |
-          $makensis = 'C:\Program Files (x86)\NSIS\makensis.exe'
+          $makensis = Get-Command 'makensis' -ErrorAction SilentlyContinue
+          if (-not $makensis) {
+            $makensisPath = Get-ChildItem -Path 'C:\Program Files (x86)\NSIS', 'C:\Program Files\NSIS' -Filter 'makensis.exe' -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+            if (-not $makensisPath) {
+              Write-Error 'Cannot find makensis.exe'
+              exit 1
+            }
+            $makensis = $makensisPath.FullName
+          } else {
+            $makensis = $makensis.Source
+          }
+          Write-Host "Using makensis: $makensis"
           & $makensis installer.nsi
           if ($LASTEXITCODE -ne 0) {
             Write-Error 'NSIS build failed'
