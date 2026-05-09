@@ -1,13 +1,15 @@
-import { spawn } from "node:child_process";
-import { platform, arch } from "node:os";
-import http from "node:http";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
-import { existsSync } from "node:fs";
-import { rm } from "node:fs/promises";
-import readline from "node:readline";
+// Compatible launcher for both CommonJS and ES Modules
+const { spawn } = require('node:child_process');
+const { platform, arch } = require('node:os');
+const http = require('node:http');
+const path = require('node:path');
+const { fileURLToPath } = require('node:url');
+const { existsSync } = require('node:fs');
+const { rm } = require('node:fs/promises');
+const readline = require('node:readline');
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const __filename = fileURLToPath(import.meta.url || '');
+const __dirname = path.dirname(__filename);
 const PORT = Number(process.env.PORT || 8010);
 const HOST = process.env.HOST || "127.0.0.1";
 const BASE_URL = `http://${HOST}:${PORT}/`;
@@ -176,7 +178,7 @@ function waitForServer(port, timeoutMs) {
 }
 
 function openBrowser() {
-  const { exec } = require("node:child_process");
+  const { exec } = require('node:child_process');
   let command;
 
   switch (platform()) {
@@ -281,7 +283,14 @@ async function main() {
   }
 }
 
-main().catch((error) => {
-  console.error(`未捕获的错误: ${error.message}`);
-  process.exit(1);
-});
+// Handle both ES Module and CommonJS
+if (typeof module !== 'undefined' && module.exports) {
+  // CommonJS
+  module.exports = { main };
+  if (require.main === module) {
+    main();
+  }
+} else {
+  // ES Module
+  main();
+}
