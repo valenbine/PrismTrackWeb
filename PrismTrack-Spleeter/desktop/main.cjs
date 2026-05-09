@@ -9,7 +9,7 @@ const codeRoot = isDev ? path.resolve(__dirname, "..") : app.getAppPath();
 const entryUrl = process.env.PRISMTRACK_DESKTOP_URL || "http://127.0.0.1:8000/";
 const serverPort = Number(new URL(entryUrl).port || 8000);
 const installRoot = isDev ? codeRoot : path.dirname(process.execPath);
-const DESKTOP_RUNTIME_CHECK_REV = "runtime-check-r3-20260509";
+const DESKTOP_RUNTIME_CHECK_REV = "runtime-check-r4-20260509";
 
 let mainWindow = null;
 let serverProcess = null;
@@ -229,7 +229,7 @@ function startServer() {
   ensureUserDirectories();
   serverStderrBuffer = "";
 
-  const serverScript = path.join(appRoot, "server.js");
+  const serverScript = path.join(codeRoot, "server.js");
   serverProcess = spawn(resolveNodeCommand(), [serverScript], {
     cwd: codeRoot,
     env: buildServerEnv(),
