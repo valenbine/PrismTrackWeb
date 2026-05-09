@@ -6,8 +6,8 @@ const http = require("node:http");
 
 const isDev = !app.isPackaged;
 const codeRoot = isDev ? path.resolve(__dirname, "..") : app.getAppPath();
-const entryUrl = process.env.PRISMTRACK_DESKTOP_URL || "http://127.0.0.1:8000/";
-const serverPort = Number(new URL(entryUrl).port || 8000);
+const entryUrl = process.env.PRISMTRACK_DESKTOP_URL || "http://127.0.0.1:8010/";
+const serverPort = Number(new URL(entryUrl).port || 8010);
 const installRoot = isDev ? codeRoot : path.dirname(process.execPath);
 const DESKTOP_RUNTIME_CHECK_REV = "runtime-check-r5-20260509";
 

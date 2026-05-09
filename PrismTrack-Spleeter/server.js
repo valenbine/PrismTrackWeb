@@ -9,7 +9,7 @@ import { fileURLToPath } from "node:url";
 import archiver from "archiver";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const PORT = Number(process.env.PORT || 8000);
+const PORT = Number(process.env.PORT || 8010);
 const APP_RUNTIME_DIR = process.env.APP_RUNTIME_DIR || path.join(__dirname, ".runtime");
 const UPLOAD_DIR = path.join(APP_RUNTIME_DIR, "uploads");
 const SEPARATED_DIR = path.join(APP_RUNTIME_DIR, "prismtrack-stems");
