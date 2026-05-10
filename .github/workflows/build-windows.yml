@@ -163,7 +163,7 @@ jobs:
 
             File /r "node_modules\"
             File "server.js"
-            File "launcher.js"
+            File "launcher.cjs"
             File "package.json"
             File "index.html"
             File "styles.css"

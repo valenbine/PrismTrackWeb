@@ -1,5 +1,5 @@
 @echo off
-setlocal enabledelayedexpansion
+chcp 65001 > nul
 
 :: ============================================
 :: PrismTrack Windows Launcher
