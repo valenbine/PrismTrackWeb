@@ -114,8 +114,19 @@ jobs:
 
           Write-Host 'All runtime files verified.'
 
-      - name: Install dependencies
-        run: npm install --omit=dev
+      - name: Install dependencies and package node_modules
+        run: |
+          npm install --omit=dev
+          # Verify installation
+          if (-not (Test-Path "node_modules")) {
+            Write-Error "node_modules directory not created after npm install"
+            exit 1
+          }
+          if (-not (Test-Path "node_modules\archiver")) {
+            Write-Error "archiver dependency not installed"
+            exit 1
+          }
+          Write-Host "Dependencies installed successfully."
 
       - name: Create NSIS installer script
         shell: pwsh
@@ -162,6 +173,8 @@ jobs:
             WriteRegDWORD HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\PrismTrackWeb" "NoRepair" 1
 
             File /r "node_modules\"
+            ; 安装文件
+            File /r "node_modules\"
             File "server.js"
             File "launcher.cjs"
             File "package.json"
@@ -172,6 +185,11 @@ jobs:
             File "ffmpeg.exe"
             File "ffprobe.exe"
             File "ffplay.exe"
+
+            ; 安装脚本和 Python 文件
+            File /r "scripts\"
+            File /r "src\"
+            File /r "python\"
 
             File /r "scripts\"
             File /r "src\"
