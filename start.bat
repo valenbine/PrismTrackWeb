@@ -1,4 +1,6 @@
 @echo off
+chcp 936 > nul
+
 :: ============================================
 :: PrismTrack Windows Launcher
 :: 端口: 8010
@@ -33,16 +35,11 @@ set PORT=8010
 echo 端口:    %PORT%
 echo.
 
-:: 检查依赖是否安装
-if not exist "node_modules" (
-    echo [INFO] 首次运行，正在安装依赖...
-    call npm install
-    if %errorlevel% neq 0 (
-        echo [ERROR] 依赖安装失败
-        pause
-        exit /b 1
-    )
-    echo.
+:: 检查依赖是否已存在（预打包）
+if exist "node_modules" (
+    echo [INFO] 检测到预打包的依赖
+) else (
+    echo [WARN] 未找到 node_modules 目录
 )
 
 :: 检查 python 目录
