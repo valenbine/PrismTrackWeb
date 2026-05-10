@@ -6,7 +6,6 @@ const path = require('node:path');
 const { existsSync } = require('node:fs');
 const readline = require('node:readline');
 
-const __dirname = __dirname;
 const PORT = Number(process.env.PORT || 8010);
 const HOST = process.env.HOST || "127.0.0.1";
 const BASE_URL = `http://${HOST}:${PORT}/`;
