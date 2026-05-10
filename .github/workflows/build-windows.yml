@@ -115,19 +115,20 @@ jobs:
 
           Write-Host 'All runtime files verified.'
 
-      - name: Install dependencies and package node_modules
+      - name: Install dependencies and verify
         run: |
           npm install --omit=dev
-          # Verify installation
           if (-not (Test-Path "node_modules")) {
-            Write-Error "node_modules directory not created after npm install"
+            Write-Error "node_modules directory not found after npm install"
             exit 1
           }
           if (-not (Test-Path "node_modules\archiver")) {
             Write-Error "archiver dependency not installed"
             exit 1
           }
-          Write-Host "Dependencies installed successfully."
+          Write-Host "Dependencies verified successfully."
+          # List node_modules to debug
+          Get-ChildItem "node_modules" | Select-Object Name | Format-Table -AutoSize
 
       - name: Create NSIS installer script
         shell: pwsh
@@ -173,9 +174,7 @@ jobs:
             WriteRegDWORD HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\PrismTrackWeb" "NoModify" 1
             WriteRegDWORD HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\PrismTrackWeb" "NoRepair" 1
 
-            File /r "node_modules\"
-            ; 安装文件
-            File /r "node_modules\"
+            ; Install all files including node_modules
             File "server.js"
             File "launcher.cjs"
             File "package.json"
@@ -187,14 +186,10 @@ jobs:
             File "ffprobe.exe"
             File "ffplay.exe"
 
-            ; 安装脚本和 Python 文件
             File /r "scripts\"
             File /r "src\"
             File /r "python\"
-
-            File /r "scripts\"
-            File /r "src\"
-            File /r "python\"
+            File /r "node_modules\"
 
             CreateDirectory "`$APPDATA\PrismTrackWeb\.runtime"
             CreateDirectory "`$APPDATA\PrismTrackWeb\pretrained_models"
@@ -222,7 +217,7 @@ jobs:
             RMDir /r "`$INSTDIR\src"
             RMDir /r "`$INSTDIR\python"
             Delete "`$INSTDIR\server.js"
-            Delete "`$INSTDIR\launcher.js"
+            Delete "`$INSTDIR\launcher.cjs"
             Delete "`$INSTDIR\package.json"
             Delete "`$INSTDIR\index.html"
             Delete "`$INSTDIR\styles.css"
