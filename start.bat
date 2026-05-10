@@ -1,6 +1,4 @@
 @echo off
-chcp 65001 > nul
-
 :: ============================================
 :: PrismTrack Windows Launcher
 :: 端口: 8010
@@ -9,10 +7,9 @@ chcp 65001 > nul
 title PrismTrack
 
 echo.
-echo +----------------------------------------------------------+
-::echo |                  PrismTrack Launcher                     |
-echo |              PrismTrack Windows 启动器                    |
-echo +----------------------------------------------------------+
+echo PrismTrack Windows 启动器
+echo ========================
+echo.
 
 :: 切换到脚本所在目录
 cd /d "%~dp0"
@@ -20,9 +17,8 @@ cd /d "%~dp0"
 :: 检查 Node.js
 where node >nul 2>&1
 if %errorlevel% neq 0 (
-    echo |  错误: 未检测到 Node.js，请先安装 Node.js                |
-    echo |  下载地址: https://nodejs.org/                           |
-    echo +----------------------------------------------------------+
+    echo 错误: 未检测到 Node.js，请先安装 Node.js
+    echo 下载地址: https://nodejs.org/
     echo.
     pause
     exit /b 1
@@ -30,12 +26,11 @@ if %errorlevel% neq 0 (
 
 :: 获取 Node.js 版本
 for /f "tokens=*" %%i in ('node -v 2^>nul') do set NODE_VERSION=%%i
-echo |  Node.js: %NODE_VERSION%
+echo Node.js: %NODE_VERSION%
 
 :: 设置端口
 set PORT=8010
-echo |  端口:    %PORT%
-echo +----------------------------------------------------------+
+echo 端口:    %PORT%
 echo.
 
 :: 检查依赖是否安装
