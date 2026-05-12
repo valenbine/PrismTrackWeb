@@ -447,10 +447,10 @@ async function startSeparation() {
 
 async function pollJobStatus(jobId) {
   const maxAttempts = 300;
-  let attempts = 0;
+  let processingAttempts = 0;
 
   const poll = async () => {
-    if (attempts >= maxAttempts) {
+    if (processingAttempts >= maxAttempts) {
       setStatus("处理超时", "Error", "分轨处理时间过长，请稍后重试。", 0, true);
       setBusy(false);
       return;
@@ -461,13 +461,13 @@ async function pollJobStatus(jobId) {
       const status = await response.json();
 
       if (status.status === "completed") {
-        updateDebugPolling(status, attempts + 1);
+        updateDebugPolling(status, processingAttempts + 1);
         handleCompletion(jobId, status);
         return;
       }
 
       if (status.status === "error") {
-        updateDebugPolling(status, attempts + 1);
+        updateDebugPolling(status, processingAttempts + 1);
         if (status.errorCode === "model_not_ready") {
           setStatus("模型未就绪", "Error", formatModelNotReadyMessage(status), 0, true);
         } else {
@@ -480,16 +480,15 @@ async function pollJobStatus(jobId) {
       }
 
       if (status.status === "queued") {
-        updateDebugPolling(status, attempts + 1);
+        updateDebugPolling(status, processingAttempts + 1);
         setStatus("排队中", "Queued", "当前任务正在排队，稍后会自动开始处理。", 6);
-        attempts++;
         modelRefreshMode = "active";
         setTimeout(poll, 1200);
         return;
       }
 
       if (status.status === "downloading") {
-        updateDebugPolling(status, attempts + 1);
+        updateDebugPolling(status, processingAttempts + 1);
         const downloadProgress = Number(status.modelDownload?.progress || 0);
         setStatus(
           "模型下载中",
@@ -497,22 +496,20 @@ async function pollJobStatus(jobId) {
           formatModelDownloadMessage(status),
           Math.max(5, Math.min(50, Math.round((status.progress || downloadProgress || 5))))
         );
-        attempts++;
         modelRefreshMode = "active";
         scheduleModelRefresh();
         setTimeout(poll, 1000);
         return;
       }
 
-      updateDebugPolling(status, attempts + 1);
+      updateDebugPolling(status, processingAttempts + 1);
       const progress = Math.min(status.progress || 10, 95);
       setStatus("处理中", "Processing", `正在使用 ${status.model || "spleeter:2stems"} 模型分离音轨...`, progress);
-      attempts++;
+      processingAttempts++;
       modelRefreshMode = "active";
       scheduleModelRefresh();
       setTimeout(poll, 1000);
     } catch (e) {
-      attempts++;
       scheduleModelRefresh();
       setTimeout(poll, 2000);
     }

@@ -9,13 +9,17 @@ import { fileURLToPath } from "node:url";
 import archiver from "archiver";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const APP_DATA_DIR = process.env.PRISMTRACK_APP_DATA_DIR
+  || (process.platform === "win32" && process.env.APPDATA
+    ? path.join(process.env.APPDATA, "prismtrack-spleeter")
+    : path.join(__dirname, ".runtime"));
 const PORT = Number(process.env.PORT || 8010);
-const APP_RUNTIME_DIR = process.env.APP_RUNTIME_DIR || path.join(__dirname, ".runtime");
+const APP_RUNTIME_DIR = process.env.APP_RUNTIME_DIR || path.join(APP_DATA_DIR, ".runtime");
 const UPLOAD_DIR = path.join(APP_RUNTIME_DIR, "uploads");
 const SEPARATED_DIR = path.join(APP_RUNTIME_DIR, "prismtrack-stems");
 const MODEL_DOWNLOAD_DIR = path.join(APP_RUNTIME_DIR, "model-downloads");
 const SPLEETER_WRAPPER = process.env.SPLEETER_WRAPPER || path.join(__dirname, "scripts", "spleeter_separate.py");
-const MODEL_PATH = process.env.SPLEETER_MODEL_PATH || process.env.MODEL_PATH || path.join(__dirname, "pretrained_models");
+const MODEL_PATH = process.env.SPLEETER_MODEL_PATH || process.env.MODEL_PATH || path.join(APP_DATA_DIR, "pretrained_models");
 const LOCAL_PYTHON = path.join(__dirname, "python", process.platform === "win32" ? "python.exe" : "python");
 const LOCAL_FFMPEG = path.join(__dirname, process.platform === "win32" ? "ffmpeg.exe" : "ffmpeg");
 const LOCAL_FFPROBE = path.join(__dirname, process.platform === "win32" ? "ffprobe.exe" : "ffprobe");
@@ -668,7 +672,7 @@ async function ensureModelReady(modelId, onProgress) {
 async function downloadModel(modelId, downloadState) {
   const modelName = getModelFolderName(modelId);
   const targetDir = path.join(MODEL_PATH, modelName);
-  const archivePath = path.join(MODEL_DOWNLOAD_DIR, `${modelName}-${Date.now()}.tar.gz`);
+  const archivePath = path.join(MODEL_DOWNLOAD_DIR, `${modelName}.tar.gz`);
 
   downloadState.status = "downloading";
   downloadState.progress = 1;
@@ -681,20 +685,20 @@ async function downloadModel(modelId, downloadState) {
     await downloadFileWithProgress(archiveUrl, archivePath, downloadState);
     const actualChecksum = await sha256File(archivePath);
     if (checksum && actualChecksum !== checksum) {
+      await unlink(archivePath).catch(() => {});
       throw new Error("下载的模型校验失败，请重试");
     }
     downloadState.status = "extracting";
     downloadState.progress = Math.max(downloadState.progress, 96);
     await extractTarGz(archivePath, targetDir);
     await writeModelProbe(targetDir);
+    await unlink(archivePath).catch(() => {});
     downloadState.status = "completed";
     downloadState.progress = 100;
   } catch (error) {
     downloadState.status = "error";
     downloadState.error = error.message;
     throw Object.assign(new Error(`模型下载失败: ${error.message}`), { code: "model_not_ready" });
-  } finally {
-    await unlink(archivePath).catch(() => {});
   }
 }
 
@@ -749,16 +753,42 @@ async function fetchModelChecksum(modelName) {
 }
 
 async function downloadFileWithProgress(url, targetPath, downloadState) {
-  const response = await fetch(url);
+  let downloadedBytes = await getFileSize(targetPath);
+  const headers = {};
+  if (downloadedBytes > 0) {
+    headers.Range = `bytes=${downloadedBytes}-`;
+  }
+
+  let response = await fetch(url, { headers });
+  if (downloadedBytes > 0 && response.status === 416) {
+    downloadState.downloadedBytes = downloadedBytes;
+    downloadState.totalBytes = downloadedBytes;
+    downloadState.progress = 95;
+    downloadState.resumable = true;
+    downloadState.archivePath = targetPath;
+    return;
+  }
+  if (downloadedBytes > 0 && response.status === 200) {
+    downloadedBytes = 0;
+  }
   if (!response.ok || !response.body) {
     throw new Error(`模型下载失败: ${response.status}`);
   }
 
-  const totalBytes = Number(response.headers.get("content-length") || 0);
+  if (headers.Range && response.status !== 206) {
+    downloadedBytes = 0;
+  }
+
+  const contentLength = Number(response.headers.get("content-length") || 0);
+  const contentRange = response.headers.get("content-range") || "";
+  const totalFromRange = Number(contentRange.match(/\/(\d+)$/)?.[1] || 0);
+  const totalBytes = totalFromRange || (downloadedBytes > 0 ? downloadedBytes + contentLength : contentLength);
   downloadState.totalBytes = totalBytes;
-  const writer = createWriteStream(targetPath);
+  downloadState.downloadedBytes = downloadedBytes;
+  downloadState.resumable = response.status === 206;
+  downloadState.archivePath = targetPath;
+  const writer = createWriteStream(targetPath, { flags: downloadedBytes > 0 ? "a" : "w" });
   const reader = response.body.getReader();
-  let downloadedBytes = 0;
 
   try {
     while (true) {
@@ -781,6 +811,11 @@ async function downloadFileWithProgress(url, targetPath, downloadState) {
     writer.destroy();
     throw error;
   }
+}
+
+async function getFileSize(filePath) {
+  const fileStat = await stat(filePath).catch(() => null);
+  return fileStat?.isFile() ? fileStat.size : 0;
 }
 
 async function extractTarGz(archivePath, targetDir) {

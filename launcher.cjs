@@ -14,8 +14,13 @@ const PYTHON_DIR = path.join(__dirname, "python");
 const LOCAL_PYTHON = path.join(PYTHON_DIR, platform() === "win32" ? "python.exe" : "python");
 const LOCAL_FFMPEG = path.join(__dirname, platform() === "win32" ? "ffmpeg.exe" : "ffmpeg");
 const LOCAL_FFPROBE = path.join(__dirname, platform() === "win32" ? "ffprobe.exe" : "ffprobe");
+const APP_DATA_DIR = process.env.PRISMTRACK_APP_DATA_DIR
+  || (platform() === "win32" && process.env.APPDATA
+    ? path.join(process.env.APPDATA, "prismtrack-spleeter")
+    : path.join(__dirname, ".runtime"));
 const LOG_DIR = process.env.PRISMTRACK_LOG_DIR || path.join(process.env.APPDATA || __dirname, "PrismTrackWeb", "logs");
 const LOG_FILE = path.join(LOG_DIR, "launcher.log");
+const MODEL_PATH = process.env.SPLEETER_MODEL_PATH || process.env.MODEL_PATH || path.join(APP_DATA_DIR, "pretrained_models");
 
 let serverProcess = null;
 let shuttingDown = false;
@@ -128,6 +133,9 @@ function startServer() {
       HOST,
       FFMPEG: ffmpeg,
       FFPROBE: ffprobe,
+      PRISMTRACK_APP_DATA_DIR: APP_DATA_DIR,
+      APP_RUNTIME_DIR: path.join(APP_DATA_DIR, ".runtime"),
+      SPLEETER_MODEL_PATH: MODEL_PATH,
     };
 
     if (existsSync(LOCAL_PYTHON)) {

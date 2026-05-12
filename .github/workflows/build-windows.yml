@@ -141,8 +141,12 @@ jobs:
           !define APP_VERSION "$env:APP_VERSION"
           !define APP_PUBLISHER "valenbine"
           !define APP_URL "https://github.com/valenbine/PrismTrackWeb"
+          !define MUI_ICON "build\icons\prismtrack.ico"
+          !define MUI_UNICON "build\icons\prismtrack.ico"
 
           OutFile "PrismTrackWeb-Setup-$env:APP_VERSION.exe"
+          Icon "build\icons\prismtrack.ico"
+          UninstallIcon "build\icons\prismtrack.ico"
           InstallDir "`$PROGRAMFILES64\PrismTrackWeb"
           InstallDirRegKey HKLM "Software\PrismTrackWeb" "InstallDir"
 
@@ -181,6 +185,7 @@ jobs:
             File "index.html"
             File "styles.css"
             File "favicon.svg"
+            File "build\icons\prismtrack.ico"
             File "start.bat"
             File "ffmpeg.exe"
             File "ffprobe.exe"
@@ -202,14 +207,14 @@ jobs:
 
             SetOutPath "`$INSTDIR"
 
-            CreateDirectory "`$APPDATA\PrismTrackWeb\.runtime"
-            CreateDirectory "`$APPDATA\PrismTrackWeb\pretrained_models"
+            CreateDirectory "`$APPDATA\prismtrack-spleeter\.runtime"
+            CreateDirectory "`$APPDATA\prismtrack-spleeter\pretrained_models"
 
             CreateDirectory "`$SMPROGRAMS\PrismTrackWeb"
-            CreateShortCut "`$SMPROGRAMS\PrismTrackWeb\PrismTrackWeb.lnk" "`$INSTDIR\start.bat" "" "`$INSTDIR\favicon.svg" 0
+            CreateShortCut "`$SMPROGRAMS\PrismTrackWeb\PrismTrackWeb.lnk" "`$INSTDIR\start.bat" "" "`$INSTDIR\prismtrack.ico" 0
             CreateShortCut "`$SMPROGRAMS\PrismTrackWeb\Uninstall.lnk" "`$INSTDIR\uninstall.exe"
 
-            CreateShortCut "`$DESKTOP\PrismTrackWeb.lnk" "`$INSTDIR\start.bat" "" "`$INSTDIR\favicon.svg" 0
+            CreateShortCut "`$DESKTOP\PrismTrackWeb.lnk" "`$INSTDIR\start.bat" "" "`$INSTDIR\prismtrack.ico" 0
 
             WriteUninstaller "`$INSTDIR\uninstall.exe"
           SectionEnd
@@ -233,6 +238,7 @@ jobs:
             Delete "`$INSTDIR\index.html"
             Delete "`$INSTDIR\styles.css"
             Delete "`$INSTDIR\favicon.svg"
+            Delete "`$INSTDIR\prismtrack.ico"
             Delete "`$INSTDIR\start.bat"
             Delete "`$INSTDIR\ffmpeg.exe"
             Delete "`$INSTDIR\ffprobe.exe"
