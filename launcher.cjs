@@ -3,7 +3,7 @@ const { spawn } = require('node:child_process');
 const { platform, arch } = require('node:os');
 const http = require('node:http');
 const path = require('node:path');
-const { existsSync } = require('node:fs');
+const { appendFileSync, existsSync, mkdirSync } = require('node:fs');
 const readline = require('node:readline');
 
 const PORT = Number(process.env.PORT || 8010);
@@ -14,13 +14,41 @@ const PYTHON_DIR = path.join(__dirname, "python");
 const LOCAL_PYTHON = path.join(PYTHON_DIR, platform() === "win32" ? "python.exe" : "python");
 const LOCAL_FFMPEG = path.join(__dirname, platform() === "win32" ? "ffmpeg.exe" : "ffmpeg");
 const LOCAL_FFPROBE = path.join(__dirname, platform() === "win32" ? "ffprobe.exe" : "ffprobe");
+const LOG_DIR = process.env.PRISMTRACK_LOG_DIR || path.join(process.env.APPDATA || __dirname, "PrismTrackWeb", "logs");
+const LOG_FILE = path.join(LOG_DIR, "launcher.log");
 
 let serverProcess = null;
 let shuttingDown = false;
 
 function log(level, ...args) {
   const time = new Date().toISOString();
-  console.log(`${time} [${level}]`, ...args);
+  const message = `${time} [${level}] ${args.map(formatLogArg).join(" ")}`;
+  console.log(message);
+  writeLogFile(message);
+}
+
+function formatLogArg(arg) {
+  if (typeof arg === "string") {
+    return arg;
+  }
+  try {
+    return JSON.stringify(arg);
+  } catch {
+    return String(arg);
+  }
+}
+
+function writeLogFile(message) {
+  try {
+    mkdirSync(LOG_DIR, { recursive: true });
+    appendFileSync(LOG_FILE, `${message}\n`, "utf8");
+  } catch {
+    // Do not fail startup when the log file cannot be written.
+  }
+}
+
+function printLogLocation() {
+  log("INFO", `Log file: ${LOG_FILE}`);
 }
 
 function printBanner() {
@@ -60,22 +88,28 @@ function checkDependencies() {
   const python = resolvePythonCommand();
   const ffmpeg = resolveFfmpegCommand();
   const ffprobe = resolveFfprobeCommand();
+  const nodeModules = path.join(__dirname, "node_modules");
+  const archiverPackage = path.join(nodeModules, "archiver", "package.json");
 
   log("INFO", "Checking dependencies...");
   log("INFO", `  Python:     ${python}`);
   log("INFO", `  FFmpeg:     ${ffmpeg}`);
   log("INFO", `  FFprobe:    ${ffprobe}`);
   log("INFO", `  Server:     ${SERVER_SCRIPT}`);
+  log("INFO", `  node_modules: ${nodeModules}`);
 
   if (!existsSync(SERVER_SCRIPT)) {
     missing.push(`server.js (${SERVER_SCRIPT})`);
   }
 
+  if (!existsSync(archiverPackage)) {
+    missing.push(`archiver (${archiverPackage})`);
+  }
+
   if (missing.length > 0) {
-    console.error();
-    console.error("Missing required files:");
-    missing.forEach((f) => console.error(`  - ${f}`));
-    console.error();
+    log("ERROR", "Missing required files:");
+    missing.forEach((f) => log("ERROR", `  - ${f}`));
+    log("ERROR", `Please send this log file when reporting the issue: ${LOG_FILE}`);
     return false;
   }
 
@@ -245,6 +279,7 @@ function setupGracefulShutdown() {
 
 async function main() {
   printBanner();
+  printLogLocation();
 
   if (!checkDependencies()) {
     process.exit(1);

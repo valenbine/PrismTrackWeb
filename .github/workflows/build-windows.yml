@@ -174,7 +174,7 @@ jobs:
             WriteRegDWORD HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\PrismTrackWeb" "NoModify" 1
             WriteRegDWORD HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\PrismTrackWeb" "NoRepair" 1
 
-            ; Install all files including node_modules
+            ; Install root files
             File "server.js"
             File "launcher.cjs"
             File "package.json"
@@ -186,10 +186,21 @@ jobs:
             File "ffprobe.exe"
             File "ffplay.exe"
 
-            File /r "scripts\"
-            File /r "src\"
-            File /r "python\"
-            File /r "node_modules\"
+            ; Install directories. SetOutPath is required here so recursive
+            ; contents are placed under the expected child directories.
+            SetOutPath "`$INSTDIR\scripts"
+            File /r "scripts\*"
+
+            SetOutPath "`$INSTDIR\src"
+            File /r "src\*"
+
+            SetOutPath "`$INSTDIR\python"
+            File /r "python\*"
+
+            SetOutPath "`$INSTDIR\node_modules"
+            File /r "node_modules\*"
+
+            SetOutPath "`$INSTDIR"
 
             CreateDirectory "`$APPDATA\PrismTrackWeb\.runtime"
             CreateDirectory "`$APPDATA\PrismTrackWeb\pretrained_models"
