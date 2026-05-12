@@ -25,12 +25,12 @@ function log(level, ...args) {
 
 function printBanner() {
   console.log();
-  console.log("╔══════════════════════════════════════════════════════════╗");
-  console.log("║                  PrismTrack Launcher                     ║");
-  console.log("╠══════════════════════════════════════════════════════════╣");
-  console.log(`║  Platform: ${platform()} ${arch()}`.padEnd(62) + "║");
-  console.log(`║  Address:  ${BASE_URL}`.padEnd(62) + "║");
-  console.log("╚══════════════════════════════════════════════════════════╝");
+  console.log("============================================================");
+  console.log("PrismTrack Launcher");
+  console.log("============================================================");
+  console.log(`Platform: ${platform()} ${arch()}`);
+  console.log(`Address:  ${BASE_URL}`);
+  console.log("============================================================");
   console.log();
 }
 
@@ -61,7 +61,7 @@ function checkDependencies() {
   const ffmpeg = resolveFfmpegCommand();
   const ffprobe = resolveFfprobeCommand();
 
-  log("INFO", "检查依赖...");
+  log("INFO", "Checking dependencies...");
   log("INFO", `  Python:     ${python}`);
   log("INFO", `  FFmpeg:     ${ffmpeg}`);
   log("INFO", `  FFprobe:    ${ffprobe}`);
@@ -73,7 +73,7 @@ function checkDependencies() {
 
   if (missing.length > 0) {
     console.error();
-    console.error("缺少必要文件:");
+    console.error("Missing required files:");
     missing.forEach((f) => console.error(`  - ${f}`));
     console.error();
     return false;
@@ -100,7 +100,7 @@ function startServer() {
       env.SPLEETER_PYTHON = LOCAL_PYTHON;
     }
 
-    log("INFO", `启动服务进程 (PID: pending)...`);
+    log("INFO", `Starting service process (PID: pending)...`);
 
     serverProcess = spawn(process.execPath, [SERVER_SCRIPT], {
       env,
@@ -128,7 +128,7 @@ function startServer() {
 
     serverProcess.on("exit", (code, signal) => {
       if (!shuttingDown) {
-        log("WARN", `服务进程异常退出 (code: ${code}, signal: ${signal})`);
+        log("WARN", `Service process exited unexpectedly (code: ${code}, signal: ${signal})`);
       }
     });
 
@@ -163,7 +163,7 @@ function waitForServer(port, timeoutMs) {
 
     const retryOrFail = () => {
       if (Date.now() - startedAt >= timeoutMs) {
-        reject(new Error("服务启动超时"));
+        reject(new Error("Service startup timed out"));
         return;
       }
       setTimeout(attempt, 500);
@@ -189,11 +189,11 @@ function openBrowser() {
       break;
   }
 
-  log("INFO", `打开系统默认浏览器: ${BASE_URL}`);
+  log("INFO", `Opening default browser: ${BASE_URL}`);
   exec(command, (error) => {
     if (error) {
-      log("WARN", `自动打开浏览器失败: ${error.message}`);
-      console.log(`请手动访问: ${BASE_URL}`);
+      log("WARN", `Failed to open browser automatically: ${error.message}`);
+      console.log(`Open manually: ${BASE_URL}`);
     }
   });
 }
@@ -204,7 +204,7 @@ function stopServer() {
   }
 
   shuttingDown = true;
-  log("INFO", "正在停止服务...");
+  log("INFO", "Stopping service...");
 
   if (platform() === "win32") {
     spawn("taskkill", ["/pid", String(serverProcess.pid), "/f", "/t"], {
@@ -216,7 +216,7 @@ function stopServer() {
   }
 
   serverProcess = null;
-  log("INFO", "服务已停止");
+  log("INFO", "Service stopped");
 }
 
 function setupGracefulShutdown() {
@@ -230,7 +230,7 @@ function setupGracefulShutdown() {
       if (shuttingDown) {
         return;
       }
-      log("INFO", `收到 ${signal} 信号，准备退出...`);
+      log("INFO", `Received ${signal}; exiting...`);
       stopServer();
       setTimeout(() => process.exit(0), 1000);
     });
@@ -256,12 +256,12 @@ async function main() {
     await startServer();
     openBrowser();
   } catch (error) {
-    console.error(`启动失败: ${error.message}`);
+    console.error(`Startup failed: ${error.message}`);
     process.exit(1);
   }
 
-  console.log("服务运行中... 按 Ctrl+C 停止服务");
-  console.log(`访问地址: ${BASE_URL}`);
+  console.log("Service is running. Press Ctrl+C to stop.");
+  console.log(`URL: ${BASE_URL}`);
   console.log();
 
   if (process.stdin.isTTY) {
@@ -269,11 +269,11 @@ async function main() {
     rl.on("line", (input) => {
       const cmd = input.trim().toLowerCase();
       if (cmd === "q" || cmd === "quit" || cmd === "exit") {
-        log("INFO", "用户输入退出命令");
+        log("INFO", "Exit command received");
         stopServer();
         process.exit(0);
       } else if (cmd === "h" || cmd === "help") {
-        console.log("命令: q/quit/exit - 退出, h/help - 帮助");
+        console.log("Commands: q/quit/exit - stop, h/help - help");
       }
     });
   }

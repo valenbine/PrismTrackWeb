@@ -3,71 +3,71 @@ chcp 936 > nul
 
 :: ============================================
 :: PrismTrack Windows Launcher
-:: 端口: 8010
+:: Port: 8010
 :: ============================================
 
 title PrismTrack
 
 echo.
-echo PrismTrack Windows 启动器
+echo PrismTrack Windows Launcher
 echo ========================
 echo.
 
-:: 切换到脚本所在目录
+:: Switch to script directory
 cd /d "%~dp0"
 
-:: 检查 Node.js
+:: Check Node.js
 where node >nul 2>&1
 if %errorlevel% neq 0 (
-    echo 错误: 未检测到 Node.js，请先安装 Node.js
-    echo 下载地址: https://nodejs.org/
+    echo [ERROR] Node.js was not found. Please install Node.js first.
+    echo Download: https://nodejs.org/
     echo.
     pause
     exit /b 1
 )
 
-:: 获取 Node.js 版本
+:: Print Node.js version
 for /f "tokens=*" %%i in ('node -v 2^>nul') do set NODE_VERSION=%%i
 echo Node.js: %NODE_VERSION%
 
-:: 设置端口
+:: Set port
 set PORT=8010
-echo 端口:    %PORT%
+echo Port:    %PORT%
 echo.
 
-:: 检查依赖是否已存在（预打包）
+:: Check pre-bundled dependencies
 if exist "node_modules" (
-    echo [INFO] 检测到预打包的依赖
+    echo [INFO] Pre-bundled dependencies detected
 ) else (
-    echo [WARN] 未找到 node_modules 目录
+    echo [WARN] node_modules directory was not found
 )
 
-:: 检查 python 目录
+:: Check bundled Python runtime
 if exist "python\python.exe" (
-    echo [INFO] 检测到内置 Python 运行时
+    echo [INFO] Bundled Python runtime detected
 ) else (
-    echo [WARN] 未检测到内置 Python，将使用系统 Python
+    echo [WARN] Bundled Python runtime was not found. System Python will be used.
 )
 
-:: 检查 ffmpeg
+:: Check bundled ffmpeg
 if exist "ffmpeg.exe" (
-    echo [INFO] 检测到内置 ffmpeg
+    echo [INFO] Bundled ffmpeg detected
 ) else (
-    echo [WARN] 未检测到内置 ffmpeg，将使用系统 PATH 中的 ffmpeg
+    echo [WARN] Bundled ffmpeg was not found. ffmpeg from PATH will be used.
 )
 
 echo.
-echo [INFO] 正在启动 PrismTrack 服务...
-echo [INFO] 服务地址: http://127.0.0.1:%PORT%
-echo [INFO] 按 Ctrl+C 停止服务
+echo [INFO] Starting PrismTrack service...
+echo [INFO] Service URL: http://127.0.0.1:%PORT%
+echo [INFO] Press Ctrl+C to stop the service
 echo.
 
-:: 启动启动器
+:: Start launcher
 node launcher.cjs
 
-:: 如果启动器退出，暂停以便查看错误
+:: Pause on startup failure
 if %errorlevel% neq 0 (
     echo.
-    echo [ERROR] 服务异常退出
+    echo [ERROR] Service exited unexpectedly
     pause
 )
