@@ -119,3 +119,55 @@ Agent 在任务执行过程中发现的条目应遵循以下格式：
   - Windows 预期日志路径为 %APPDATA%/PrismTrack/logs/desktop.log，启动失败弹窗应提示该路径
   - packaged Electron 使用 process.execPath 启动 server.js 时需要设置 ELECTRON_RUN_AS_NODE=1
   - 每次修改桌面启动链路时应更新 DESKTOP_RUNTIME_CHECK_REV，便于区分用户运行的安装包版本
+
+[PrismTrackWeb Windows 浏览器启动器约定]
+- Date: 2026-05-13
+- Context: Agent 在执行 Windows 安装包与 Web 启动器迁移时发现
+- Category: 代码结构
+- Instructions:
+  - PrismTrackWeb 当前 Windows 安装包不使用 Electron 窗口，启动链路为 start.bat 调用 node launcher.cjs，再启动 server.js 并打开系统默认浏览器
+  - 默认端口固定为 8010，访问地址为 http://127.0.0.1:8010/
+  - package.json 含 type=module，因此 CommonJS 启动器必须使用 launcher.cjs，不能使用 launcher.js
+  - Windows 控制台输出应尽量保持 ASCII，避免中文或 Unicode 框线在 cmd codepage 下乱码
+
+[PrismTrackWeb Windows 安装包打包约定]
+- Date: 2026-05-13
+- Context: Agent 在修复 PrismTrackWeb NSIS 安装包缺少 node_modules 与 Python 运行时时发现
+- Category: 构建方法
+- Instructions:
+  - PrismTrackWeb 的 Windows 安装包 workflow 位于 .github/workflows/build-windows.yml，并推送到 valenbine/PrismTrackWeb main 后自动触发
+  - workflow 使用 npm install --omit=dev 预安装生产依赖，并把 node_modules 打进 NSIS 安装包，用户机器首次运行时不应执行 npm install
+  - NSIS 递归打包目录时必须先 SetOutPath 到对应子目录，再 File /r "目录\*"，否则可能把内容展开到安装根目录
+  - 安装包需包含 python、scripts、src、node_modules、ffmpeg.exe、ffprobe.exe、ffplay.exe、server.js、launcher.cjs、start.bat、package.json 等运行文件
+  - 安装包图标、卸载图标、桌面快捷方式和开始菜单快捷方式统一使用 build/icons/prismtrack.ico
+
+[PrismTrackWeb 运行日志约定]
+- Date: 2026-05-13
+- Context: Agent 在为 Windows 浏览器启动器增加排障日志时发现
+- Category: 代码模式
+- Instructions:
+  - launcher.cjs 会把启动器日志和 server.js stdout/stderr 写入 %APPDATA%/PrismTrackWeb/logs/launcher.log
+  - 用户反馈 Windows 运行失败时，应优先让用户提供 %APPDATA%/PrismTrackWeb/logs/launcher.log
+  - launcher.cjs 启动时会打印日志路径，并在缺少 server.js 或 archiver 时把缺失文件写入日志
+
+[PrismTrackWeb 模型下载与缓存约定]
+- Date: 2026-05-13
+- Context: Agent 在修复模型下载超时、断点续传和模型缓存路径时发现
+- Category: 环境配置
+- Instructions:
+  - Windows 默认模型缓存根目录为 %APPDATA%/prismtrack-spleeter/pretrained_models
+  - 运行时临时目录为 %APPDATA%/prismtrack-spleeter/.runtime，模型下载临时包位于 .runtime/model-downloads/<模型名>.tar.gz
+  - Spleeter 模型目录保持默认子目录命名：2stems、4stems、5stems
+  - 模型下载支持 HTTP Range 断点续传；网络中断时保留 .tar.gz，校验失败时删除坏包，成功解压后删除压缩包
+  - 前端轮询不应把 queued 或 downloading 状态计入分离处理超时，只有 processing 状态才计入处理超时
+  - 后端 600000ms 的 runCommand 超时只包住 Python/Spleeter 分离命令，不包含 ensureModelReady 的模型下载时间
+
+[PrismTrackWeb GitHub 同步约定]
+- Date: 2026-05-13
+- Context: Agent 在执行 GitHub 推送、构建和同步检查时发现
+- Category: 构建方法
+- Instructions:
+  - 当前实际发布仓库远程为 prismweb=https://github.com/valenbine/PrismTrackWeb.git，目标分支为 main
+  - 本地开发分支 260504-feat-prismtrack-spleeter-migration 会推送到 prismweb main，origin 仍指向原始 PrismTrack 仓库
+  - 手动触发 Windows 安装包使用 gh workflow run "Build PrismTrackWeb Windows Installer" --repo valenbine/PrismTrackWeb --ref main 并传入 version 与 release_notes
+  - 检查远端同步时应比较本地 HEAD 与 git ls-remote prismweb refs/heads/main，而不是只看 origin 分支 ahead 状态
